@@ -12,8 +12,8 @@ export const BARBER_INFO = {
   phone: "34671237755",
   instagram: "j.barber.s",
   instagramUrl: "https://instagram.com/j.barber.s",
-  address: "14 C. Hernán Cortés, Piornal, Extremadura",
-  mapsUrl: "https://www.google.com/maps/search/?api=1&query=14+C.+Hern%C3%A1n+Cort%C3%A9s,+Piornal,+Extremadura",
+  address: "13 C. Hernán Cortés, Piornal, Extremadura",
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=13+C.+Hern%C3%A1n+Cort%C3%A9s,+Piornal,+Extremadura",
   // Franjas de 30 minutos de mañana y tarde
   morningSlots: [
     "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"
