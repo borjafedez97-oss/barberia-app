@@ -20,7 +20,8 @@ import {
   ShieldBan,
   Share2,
   History,
-  CalendarX2
+  CalendarX2,
+  AlertTriangle
 } from "lucide-react";
 
 interface Appointment {
@@ -48,7 +49,6 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
   const [blockDate, setBlockDate] = useState<string>("");
   const [blockTime, setBlockTime] = useState<string>("10:00");
@@ -62,7 +62,6 @@ export default function AdminPage() {
   const [manualService, setManualService] = useState<string>(SERVICES[0].name);
   const [manualPrice, setManualPrice] = useState<number>(SERVICES[0].price);
 
-  // Modal Historial de Cliente
   const [selectedClientHistory, setSelectedClientHistory] = useState<{
     name: string;
     phone: string;
@@ -143,7 +142,6 @@ export default function AdminPage() {
     }
   };
 
-  // CERRAR DÍA COMPLETO (Festivo / Jarramplas / Vacaciones)
   const handleCloseEntireDay = async () => {
     const reason = window.prompt("Motivo del cierre de día:", "Festivo / Vacaciones / Jarramplas");
     if (!reason) return;
@@ -152,7 +150,7 @@ export default function AdminPage() {
     const inserts = allSlots.map((slot) => ({
       client_name: `[BLOQUEADO] ${reason.trim()}`,
       client_phone: BARBER_INFO.phone,
-      service_name: "Día completo cerrado",
+      service_name: "Día cerrado",
       price: 0,
       booking_date: selectedDate,
       booking_time: slot,
@@ -163,9 +161,8 @@ export default function AdminPage() {
     await fetchDayAppointments();
   };
 
-  // REABRIR DÍA COMPLETO
   const handleReopenEntireDay = async () => {
-    if (!window.confirm(`¿Seguro que deseas desbloquear y reabrir todas las horas del día ${selectedDate}?`)) return;
+    if (!window.confirm(`¿Seguro que deseas reabrir todas las horas del día ${selectedDate}?`)) return;
 
     setLoading(true);
     await supabase
@@ -177,12 +174,11 @@ export default function AdminPage() {
     await fetchDayAppointments();
   };
 
-  // COMPARTIR HUECO LIBRE EN INSTAGRAM STORY
   const handleShareStorySlot = (slotTime: string) => {
     const text =
       `🚨 ¡HUECO LIBRE DE ÚLTIMA HORA! 💈\n` +
       `📅 Hoy a las ${slotTime} h en JBarbers Piornal.\n\n` +
-      `📲 Pide la cita antes de que vuele en el enlace de la bio o en nuestra web:`;
+      `📲 Pide la cita antes de que vuele en el enlace de la bio:`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text);
@@ -190,7 +186,6 @@ export default function AdminPage() {
     }
   };
 
-  // CONSULTAR HISTORIAL DEL CLIENTE
   const handleViewClientHistory = async (app: Appointment) => {
     if (app.client_phone === "En local" || app.client_name.startsWith("[BLOQUEADO]")) return;
 
@@ -214,7 +209,6 @@ export default function AdminPage() {
     }
   };
 
-  // RECORDATORIO WHATSAPP
   const sendWhatsAppReminder = (app: Appointment) => {
     const cleanPhone = app.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
@@ -234,9 +228,15 @@ export default function AdminPage() {
   const setQuickDate = (daysOffset: number) => {
     const d = new Date();
     d.setDate(d.getDate() + daysOffset);
-    const iso = d.toISOString().split("T")[0];
-    setSelectedDate(iso);
+    setSelectedDate(d.toISOString().split("T")[0]);
   };
+
+  // DETECTAR SOLAPAMIENTOS DE HORA
+  const activeAppsForDuplicateCheck = appointments.filter((a) => a.status !== "cancelled");
+  const timeOccurrences = activeAppsForDuplicateCheck.reduce((acc, curr) => {
+    acc[curr.booking_time] = (acc[curr.booking_time] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const filteredAppointments = appointments.filter((a) => {
     if (!searchTerm.trim()) return true;
@@ -269,7 +269,7 @@ export default function AdminPage() {
 
           <div>
             <h1 className="text-xl font-bold tracking-wide">Panel JBarbers</h1>
-            <p className="text-xs text-zinc-400 mt-1">Introduce el PIN de 4 dígitos</p>
+            <p className="text-xs text-zinc-400 mt-1">Introduce tu PIN de acceso</p>
           </div>
 
           <div>
@@ -303,12 +303,54 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center">
-      {/* CABECERA */}
-      <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes adminTicker {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
+        }
+        .admin-marquee {
+          display: flex;
+          width: 200%;
+          animation: adminTicker 22s linear infinite;
+        }
+      ` }} />
+
+      {/* CINTA SUPERIOR DINÁMICA DEL ADMIN */}
+      <div className="w-full max-w-2xl overflow-hidden bg-zinc-900 border-b border-zinc-800 py-1 select-none text-[10px] text-zinc-400 font-semibold tracking-wider uppercase">
+        <div className="admin-marquee">
+          <div className="flex items-center gap-6 whitespace-nowrap">
+            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
+            <span>•</span>
+            <span>📅 DÍA: {selectedDate}</span>
+            <span>•</span>
+            <span>👥 {activeAppointments.length} CLIENTES CITADOS</span>
+            <span>•</span>
+            <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
+            <span>•</span>
+            <span>📍 PIORNAL</span>
+            <span>•</span>
+          </div>
+          <div className="flex items-center gap-6 whitespace-nowrap pl-6">
+            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
+            <span>•</span>
+            <span>📅 DÍA: {selectedDate}</span>
+            <span>•</span>
+            <span>👥 {activeAppointments.length} CLIENTES CITADOS</span>
+            <span>•</span>
+            <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
+            <span>•</span>
+            <span>📍 PIORNAL</span>
+            <span>•</span>
+          </div>
+        </div>
+      </div>
+
+      {/* CABECERA SUPERIOR */}
+      <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-bold text-amber-400 tracking-wide">JBARBERS • PANEL</h1>
-            <p className="text-[11px] text-zinc-400">Control de citas y agenda</p>
+            <h1 className="text-base font-black text-amber-400 tracking-wider">JBARBERS • AGENDA</h1>
+            <p className="text-[11px] text-zinc-400">Control de clientes y caja</p>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -343,8 +385,8 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* SELECTOR RÁPIDO DE FECHA Y BOTÓN FESTIVOS */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60 flex-wrap">
+        {/* SELECTOR RÁPIDO */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 flex-wrap">
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setQuickDate(0)}
@@ -391,13 +433,13 @@ export default function AdminPage() {
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        {/* TIMELINE VISUAL DE HORAS (ESTILO AGENDA) */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+        {/* TIMELINE VISUAL DE LA JORNADA */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2 shadow-lg">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-zinc-300">Timeline del día</span>
+            <span className="font-bold text-zinc-200">Distribución de horas</span>
             <div className="flex items-center gap-2 text-[10px] text-zinc-400">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Libre</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Cita</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Ocupada</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600" /> Bloqueo</span>
             </div>
           </div>
@@ -411,9 +453,9 @@ export default function AdminPage() {
               return (
                 <div
                   key={slot}
-                  className={`p-1.5 rounded-lg border text-center text-[11px] flex flex-col justify-between transition ${
+                  className={`p-2 rounded-xl border text-center text-[11px] flex flex-col justify-between transition ${
                     isBooked
-                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold"
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold shadow-sm"
                       : isBlocked
                       ? "bg-zinc-850 border-zinc-800 text-zinc-500 line-through"
                       : "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"
@@ -424,7 +466,7 @@ export default function AdminPage() {
                     <button
                       onClick={() => handleShareStorySlot(slot)}
                       className="mt-1 text-[9px] text-zinc-400 hover:text-amber-400 flex items-center justify-center gap-0.5"
-                      title="Compartir hueco en Instagram Story"
+                      title="Copiar texto para Story de Instagram"
                     >
                       <Share2 className="w-2.5 h-2.5" /> Story
                     </button>
@@ -440,16 +482,16 @@ export default function AdminPage() {
           <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
           <input
             type="text"
-            placeholder="Buscar por cliente, teléfono o servicio..."
+            placeholder="Buscar por cliente, teléfono o corte..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
           />
         </div>
 
-        {/* RESUMEN DE CAJA Y CLIENTES */}
+        {/* MÉTRICAS DE CAJA */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
+          <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-zinc-400 text-xs">
               <span>Clientes activos</span>
               <Users className="w-4 h-4 text-amber-400" />
@@ -457,10 +499,10 @@ export default function AdminPage() {
             <p className="text-2xl font-black text-zinc-100 mt-1">{activeAppointments.length}</p>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
+          <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-zinc-400 text-xs">
               <span>Caja estimada</span>
-              <span className="text-emerald-400 font-bold text-xs">EUR</span>
+              <span className="text-emerald-400 font-black text-xs">EUR</span>
             </div>
             <p className="text-2xl font-black text-emerald-400 mt-1">{totalRevenue} €</p>
           </div>
@@ -470,16 +512,16 @@ export default function AdminPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Citas y Bloqueos ({filteredAppointments.length})
+              Agenda ({filteredAppointments.length})
             </h2>
-            <span className="text-[11px] text-zinc-500">{selectedDate}</span>
+            <span className="text-[11px] text-zinc-500 font-semibold">{selectedDate}</span>
           </div>
 
           {loading ? (
-            <div className="text-center py-10 text-xs text-zinc-500">Cargando agenda...</div>
+            <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda...</div>
           ) : filteredAppointments.length === 0 ? (
-            <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-xl p-8 text-center text-xs text-zinc-500 space-y-2">
-              <p>No hay citas ni horas bloqueadas para este día.</p>
+            <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-2">
+              <p>No hay citas ni bloqueos registrados para este día.</p>
               <button
                 onClick={() => {
                   setManualDate(selectedDate);
@@ -487,18 +529,19 @@ export default function AdminPage() {
                 }}
                 className="text-amber-400 underline font-semibold text-xs"
               >
-                + Añadir una cita manual ahora
+                + Añadir una cita manual
               </button>
             </div>
           ) : (
             filteredAppointments.map((app) => {
               const isBlocked = app.client_name.startsWith("[BLOQUEADO]");
+              const isDuplicate = !isBlocked && app.status !== "cancelled" && timeOccurrences[app.booking_time] > 1;
 
               if (isBlocked) {
                 return (
                   <div
                     key={app.id}
-                    className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl p-3.5 flex items-center justify-between"
+                    className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-3.5 flex items-center justify-between"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -514,7 +557,7 @@ export default function AdminPage() {
 
                     <button
                       onClick={() => handleDeleteAppointment(app.id, true)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-semibold transition"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition"
                       title="Desbloquear hora"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -527,14 +570,23 @@ export default function AdminPage() {
               return (
                 <div
                   key={app.id}
-                  className={`border rounded-xl p-4 transition space-y-3 ${
-                    app.status === "cancelled"
+                  className={`border rounded-2xl p-4 transition space-y-3 shadow-lg ${
+                    isDuplicate
+                      ? "bg-rose-950/20 border-rose-500/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+                      : app.status === "cancelled"
                       ? "bg-zinc-900/40 border-zinc-900 opacity-60"
                       : app.status === "completed"
                       ? "bg-emerald-950/10 border-emerald-900/40"
                       : "bg-zinc-900 border-zinc-800"
                   }`}
                 >
+                  {isDuplicate && (
+                    <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[11px] text-rose-300 font-bold">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>⚠️ HORA DUPLICADA: Coincide con otro cliente a las {app.booking_time} h</span>
+                    </div>
+                  )}
+
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
@@ -574,7 +626,7 @@ export default function AdminPage() {
                       </p>
 
                       {app.notes && (
-                        <p className="text-xs text-zinc-400 bg-zinc-950/80 p-2 rounded-lg border border-zinc-800 mt-2">
+                        <p className="text-xs text-zinc-400 bg-zinc-950/80 p-2 rounded-xl border border-zinc-800 mt-2">
                           💬 Nota: {app.notes}
                         </p>
                       )}
@@ -584,7 +636,7 @@ export default function AdminPage() {
                       {app.client_phone !== "En local" && (
                         <a
                           href={`tel:${app.client_phone}`}
-                          className="p-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 rounded-lg transition"
+                          className="p-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 rounded-xl transition"
                           title="Llamar"
                         >
                           <Phone className="w-4 h-4" />
@@ -592,7 +644,7 @@ export default function AdminPage() {
                       )}
                       <button
                         onClick={() => handleDeleteAppointment(app.id, false)}
-                        className="p-2 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-lg transition"
+                        className="p-2 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl transition"
                         title="Eliminar cita"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -604,7 +656,7 @@ export default function AdminPage() {
                     {app.client_phone !== "En local" ? (
                       <button
                         onClick={() => sendWhatsAppReminder(app)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition"
                       >
                         <MessageCircle className="w-3.5 h-3.5 fill-current" />
                         <span>Recordar por WhatsApp</span>
@@ -617,7 +669,7 @@ export default function AdminPage() {
                       {app.status !== "completed" && (
                         <button
                           onClick={() => updateStatus(app.id, "completed")}
-                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-emerald-950 text-zinc-300 hover:text-emerald-400 border border-zinc-700 rounded-lg text-xs flex items-center gap-1 font-semibold transition"
+                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-emerald-950 text-zinc-300 hover:text-emerald-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Listo</span>
@@ -626,7 +678,7 @@ export default function AdminPage() {
                       {app.status !== "cancelled" && (
                         <button
                           onClick={() => updateStatus(app.id, "cancelled")}
-                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-lg text-xs flex items-center gap-1 font-semibold transition"
+                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
                         >
                           <X className="w-3.5 h-3.5" />
                           <span>Anular</span>
@@ -656,19 +708,19 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-center">
               <div>
-                <p className="text-[10px] text-zinc-500 uppercase">Visitas totales</p>
+                <p className="text-[10px] text-zinc-500 uppercase">Visitas</p>
                 <p className="text-lg font-black text-amber-400">{selectedClientHistory.totalVisits}</p>
               </div>
               <div>
-                <p className="text-[10px] text-zinc-500 uppercase">Gasto acumulado</p>
+                <p className="text-[10px] text-zinc-500 uppercase">Gasto total</p>
                 <p className="text-lg font-black text-emerald-400">{selectedClientHistory.totalSpent} €</p>
               </div>
             </div>
 
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              <p className="text-xs font-semibold text-zinc-400">Últimos cortes:</p>
+              <p className="text-xs font-semibold text-zinc-400">Historial de citas:</p>
               {selectedClientHistory.history.map((h) => (
-                <div key={h.id} className="text-[11px] p-2 bg-zinc-950/60 rounded-lg border border-zinc-850 flex justify-between">
+                <div key={h.id} className="text-[11px] p-2 bg-zinc-950/60 rounded-xl border border-zinc-850 flex justify-between">
                   <span>{h.booking_date} • {h.service_name}</span>
                   <strong className="text-amber-400">{h.price} €</strong>
                 </div>
@@ -677,9 +729,9 @@ export default function AdminPage() {
 
             <button
               onClick={() => setSelectedClientHistory(null)}
-              className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold"
+              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold"
             >
-              Cerrar
+              Cerrar ficha
             </button>
           </div>
         </div>
@@ -723,7 +775,7 @@ export default function AdminPage() {
                   type="date"
                   value={blockDate}
                   onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -732,7 +784,7 @@ export default function AdminPage() {
                 <select
                   value={blockTime}
                   onChange={(e) => setBlockTime(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 >
                   {allSlots.map((t) => (
                     <option key={t} value={t}>{t}</option>
@@ -746,8 +798,8 @@ export default function AdminPage() {
                   type="text"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej: Médico, descanso..."
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
+                  placeholder="Ej: Médico, recado, descanso..."
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
             </div>
@@ -805,7 +857,7 @@ export default function AdminPage() {
                   placeholder="Ej: Marcos Pérez"
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -816,7 +868,7 @@ export default function AdminPage() {
                   placeholder="Ej: 612345678"
                   value={manualPhone}
                   onChange={(e) => setManualPhone(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -827,7 +879,7 @@ export default function AdminPage() {
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
+                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-xs text-zinc-100 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -835,7 +887,7 @@ export default function AdminPage() {
                   <select
                     value={manualTime}
                     onChange={(e) => setManualTime(e.target.value)}
-                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
+                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-xs text-zinc-100 focus:outline-none"
                   >
                     {allSlots.map((t) => (
                       <option key={t} value={t}>{t}</option>
@@ -853,7 +905,7 @@ export default function AdminPage() {
                     setManualService(e.target.value);
                     if (serv) setManualPrice(serv.price);
                   }}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-xs text-zinc-100 focus:outline-none"
                 >
                   {SERVICES.map((s) => (
                     <option key={s.id} value={s.name}>{s.name} ({s.price} €)</option>
