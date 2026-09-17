@@ -20,7 +20,8 @@ import {
   Flame,
   Sparkles,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Code2
 } from "lucide-react";
 
 function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -33,7 +34,35 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
+// 1. SONIDO METÁLICO/MECÁNICO SINTÉTICO (Web Audio API)
+const playMechanicalClick = () => {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.04);
+
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.04);
+  } catch {
+    // Si el usuario tiene el audio bloqueado, sigue sin fallar
+  }
+};
+
 const triggerHaptic = (duration = 45) => {
+  playMechanicalClick();
   if (typeof window !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate(duration);
@@ -59,6 +88,7 @@ export default function BookingPage() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [splashProgress, setSplashProgress] = useState<number>(10);
   const [greeting, setGreeting] = useState<string>("Bienvenido");
+  const [currentTimeStr, setCurrentTimeStr] = useState<string>("");
   
   const [step, setStep] = useState<number>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -73,7 +103,24 @@ export default function BookingPage() {
   const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
   const [waitlistName, setWaitlistName] = useState<string>("");
 
+  // HUELLA DE AUTOR: Contador de toques secretos
+  const [signatureTaps, setSignatureTaps] = useState<number>(0);
+  const [showEasterEgg, setShowEasterEgg] = useState<boolean>(false);
+
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
+
+  // Reloj en tiempo real
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setCurrentTimeStr(
+        now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+      );
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -123,7 +170,20 @@ export default function BookingPage() {
     fetchOccupiedSlots();
   }, [selectedDate]);
 
-  // Protocolo estricto anti-solapamiento
+  // Detector de toques secretos en tu firma
+  const handleSignatureClick = () => {
+    const nextCount = signatureTaps + 1;
+    setSignatureTaps(nextCount);
+    triggerHaptic(20);
+
+    if (nextCount >= 5) {
+      triggerHaptic(80);
+      setShowEasterEgg(true);
+      setSignatureTaps(0);
+      setTimeout(() => setShowEasterEgg(false), 4500);
+    }
+  };
+
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -204,7 +264,7 @@ export default function BookingPage() {
     setWaitlistName("");
   };
 
-  // SPLASH SCREEN ELEGANTE
+  // SPLASH SCREEN
   if (showSplash) {
     return (
       <div className="fixed inset-0 bg-zinc-950 flex flex-col items-center justify-center z-50">
@@ -233,8 +293,9 @@ export default function BookingPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-28">
-      {/* ANIMACIONES CSS: BARBER POLE + MARQUEE + GOLD SHIMMER */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-32 relative overflow-x-hidden">
+      
+      {/* ESTILOS DE ANIMACIÓN: CHISPAS + BORDE DE NEÓN GIRATORIO + SHIMMER */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -264,7 +325,6 @@ export default function BookingPage() {
           background-size: 56px 100%;
           animation: barberPoleMove 1.5s linear infinite;
         }
-        /* RESPLANDOR DE ORO LÍQUIDO */
         @keyframes goldShimmer {
           0% { transform: translateX(-150%) skewX(-20deg); }
           50%, 100% { transform: translateX(250%) skewX(-20deg); }
@@ -289,12 +349,58 @@ export default function BookingPage() {
           animation: goldShimmer 3.5s infinite ease-in-out;
           pointer-events: none;
         }
+        /* BORDE GIRATORIO DE LUZ */
+        @keyframes rotateBorder {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .neon-border-box {
+          position: relative;
+          z-index: 0;
+          overflow: hidden;
+        }
+        .neon-border-box::before {
+          content: '';
+          position: absolute;
+          z-index: -2;
+          left: -50%;
+          top: -50%;
+          width: 200%;
+          height: 200%;
+          background: conic-gradient(transparent, #f59e0b, transparent 30%);
+          animation: rotateBorder 4s linear infinite;
+        }
+        .neon-border-box::after {
+          content: '';
+          position: absolute;
+          z-index: -1;
+          left: 1px;
+          top: 1px;
+          width: calc(100% - 2px);
+          height: calc(100% - 2px);
+          background: #18181b;
+          border-radius: inherit;
+        }
+        /* CHISPAS DORADAS AL CONFIRMAR */
+        @keyframes sparkFly {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          100% { transform: translateY(-120px) translateX(var(--tx)) scale(0); opacity: 0; }
+        }
+        .sparkle-dot {
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          background: #fbbf24;
+          border-radius: 50%;
+          box-shadow: 0 0 10px #f59e0b;
+          animation: sparkFly 1.2s ease-out forwards;
+        }
       ` }} />
 
-      {/* TIRA TRADICIONAL DE BARBER POLE */}
+      {/* TIRA BARBER POLE */}
       <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
-      {/* CINTA MARQUEE EN MOVIMIENTO */}
+      {/* CINTA MARQUEE */}
       <div className="w-full max-w-lg overflow-hidden bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-zinc-950 py-1.5 border-b border-amber-400/40 shadow-lg select-none">
         <div className="marquee-container text-[11px] font-black tracking-widest uppercase">
           <div className="flex items-center gap-6 whitespace-nowrap">
@@ -337,12 +443,12 @@ export default function BookingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
         </div>
 
-        {/* LIVE BADGE */}
-        <div className="absolute top-3 left-3 z-10">
+        {/* LIVE BADGE + RELOJ EN DIRECTO */}
+        <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
           {nextAvailableToday ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-amber-500/50 text-amber-400 text-[11px] font-semibold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span>⚡ Próximo hueco hoy: {nextAvailableToday} h</span>
+              <span>⚡ Hueco libre hoy: {nextAvailableToday} h</span>
             </div>
           ) : (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-zinc-700 text-zinc-300 text-[11px] font-semibold shadow-lg">
@@ -350,6 +456,12 @@ export default function BookingPage() {
               <span>{greeting}</span>
             </div>
           )}
+
+          {/* Micro-widget reloj de Piornal */}
+          <div className="px-2.5 py-1 rounded-full bg-zinc-950/80 backdrop-blur-md border border-zinc-800 text-[11px] text-zinc-300 font-mono flex items-center gap-1 shadow-md">
+            <span className="text-zinc-500">Piornal</span>
+            <span className="text-amber-400 font-bold">{currentTimeStr}</span>
+          </div>
         </div>
 
         {/* LOGO */}
@@ -404,7 +516,7 @@ export default function BookingPage() {
         )}
       </header>
 
-      {/* CONTENIDO DE PASOS */}
+      {/* CONTENIDO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
         {/* PASO 1: SELECCIONAR SERVICIO */}
@@ -426,14 +538,18 @@ export default function BookingPage() {
                     setSelectedService(s);
                     setStep(2);
                   }}
-                  className="text-left p-4 rounded-2xl border bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 active:scale-[0.98] border-zinc-800/90 text-zinc-200 transition-all flex items-center justify-between relative overflow-hidden group shadow-lg"
+                  className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
+                    s.popular
+                      ? "neon-border-box"
+                      : "bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 border-zinc-800/90 text-zinc-200"
+                  }`}
                 >
                   {s.popular && (
-                    <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md">
-                      <Sparkles className="w-2.5 h-2.5" /> Recomendado
+                    <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md z-10">
+                      <Sparkles className="w-2.5 h-2.5" /> Más pedido
                     </span>
                   )}
-                  <div>
+                  <div className="relative z-10">
                     <h3 className="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition-colors">
                       {s.name}
                     </h3>
@@ -442,7 +558,7 @@ export default function BookingPage() {
                       ⏱️ {s.duration} min
                     </span>
                   </div>
-                  <div className="text-right pl-3 flex items-center gap-2">
+                  <div className="text-right pl-3 flex items-center gap-2 relative z-10">
                     <span className="text-base font-black text-amber-400">{s.price} €</span>
                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 transition-colors" />
                   </div>
@@ -537,7 +653,7 @@ export default function BookingPage() {
                             isUnavailable
                               ? "bg-zinc-900/30 border-zinc-900 text-zinc-600 line-through cursor-not-allowed"
                               : isSelected
-                              ? "bg-amber-500 text-zinc-950 font-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                              ? "bg-amber-500 text-zinc-950 font-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
                               : isNext
                               ? "bg-zinc-900 border-amber-500/70 text-amber-400 font-bold"
                               : "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200"
@@ -577,7 +693,7 @@ export default function BookingPage() {
                             isUnavailable
                               ? "bg-zinc-900/30 border-zinc-900 text-zinc-600 line-through cursor-not-allowed"
                               : isSelected
-                              ? "bg-amber-500 text-zinc-950 font-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                              ? "bg-amber-500 text-zinc-950 font-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
                               : isNext
                               ? "bg-zinc-900 border-amber-500/70 text-amber-400 font-bold"
                               : "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200"
@@ -673,16 +789,27 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 4: CONFIRMACIÓN */}
+        {/* PASO 4: CONFIRMACIÓN CON CHISPAS DORADAS */}
         {step === 4 && (
-          <div className="text-center py-10 space-y-4">
-            <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 animate-pulse">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="text-center py-12 space-y-4 relative">
+            {/* Lluvia de partículas doradas */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="sparkle-dot" style={{ top: "30%", left: "45%", "--tx": "-40px" } as React.CSSProperties} />
+              <div className="sparkle-dot" style={{ top: "25%", left: "55%", "--tx": "50px" } as React.CSSProperties} />
+              <div className="sparkle-dot" style={{ top: "40%", left: "40%", "--tx": "-70px" } as React.CSSProperties} />
+              <div className="sparkle-dot" style={{ top: "35%", left: "60%", "--tx": "60px" } as React.CSSProperties} />
+              <div className="sparkle-dot" style={{ top: "20%", left: "50%", "--tx": "0px" } as React.CSSProperties} />
             </div>
 
-            <h2 className="text-xl font-bold text-zinc-100">¡Cita registrada con éxito!</h2>
-            <p className="text-xs text-zinc-400 max-w-xs mx-auto">
-              Se ha abierto WhatsApp con los datos de tu reserva para que el barbero te confirme el turno.
+            <div className="w-20 h-20 bg-amber-500/15 border border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+
+            <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-wide">
+              ¡Cita Registrada!
+            </h2>
+            <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+              Hemos abierto WhatsApp con todos los detalles de tu turno. El barbero te confirmará la reserva en cuanto lo lea.
             </p>
 
             <div className="pt-4">
@@ -696,7 +823,7 @@ export default function BookingPage() {
                   setNotes("");
                   setStep(1);
                 }}
-                className="px-6 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:scale-95 border border-zinc-700 text-xs font-semibold text-zinc-200 transition-all shadow-md"
+                className="px-6 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 active:scale-95 border border-zinc-700 text-xs font-semibold text-zinc-200 transition-all shadow-md"
               >
                 Pedir otra cita
               </button>
@@ -705,7 +832,26 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* BARRA FLOTANTE FIJA INFERIOR (STICKY BOTTOM BAR) CON RESPLANDOR DE ORO LÍQUIDO */}
+      {/* PIE DE PÁGINA: TU HUELLA DE AUTOR DISCRETA */}
+      <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
+        <button
+          onClick={handleSignatureClick}
+          className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-400 active:text-amber-400 transition"
+        >
+          <Code2 className="w-3.5 h-3.5 text-zinc-600" />
+          <span>Designed & Built with precision by <strong className="font-semibold text-zinc-400 hover:text-amber-400">Borja</strong></span>
+        </button>
+      </footer>
+
+      {/* EASTER EGG SECRETO AL TOCAR 5 VECES TU NOMBRE */}
+      {showEasterEgg && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-zinc-900 border border-amber-500/60 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-2 text-xs font-bold text-amber-300 animate-bounce">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>⚡ Desarrollado a medida para JBarbers por Borjita • 2026</span>
+        </div>
+      )}
+
+      {/* BARRA FLOTANTE FIJA INFERIOR (STICKY BAR) CON GOLD SHIMMER */}
       {step === 2 && (
         <div className="fixed bottom-0 left-0 right-0 p-3 bg-zinc-950/85 backdrop-blur-md border-t border-zinc-800/80 z-40 flex justify-center">
           <div className="w-full max-w-lg">
