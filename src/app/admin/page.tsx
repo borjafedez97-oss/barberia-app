@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { BARBER_INFO, SERVICES } from "@/data/services";
 import { 
@@ -12,17 +12,21 @@ import {
   X, 
   MessageCircle, 
   Users, 
-  RefreshCw,
-  AlertCircle,
-  Trash2,
-  Search,
-  UserPlus,
-  ShieldBan,
-  Share2,
-  History,
-  CalendarX2,
-  AlertTriangle,
-  Timer
+  RefreshCw, 
+  AlertCircle, 
+  Trash2, 
+  Search, 
+  UserPlus, 
+  ShieldBan, 
+  Share2, 
+  History, 
+  CalendarX2, 
+  AlertTriangle, 
+  Timer,
+  TrendingUp,
+  BarChart3,
+  Award,
+  ChevronRight
 } from "lucide-react";
 
 interface Appointment {
@@ -40,12 +44,21 @@ interface Appointment {
 
 const ADMIN_PIN = "1234";
 
+const getMonthLabel = (monthStr: string) => {
+  if (!monthStr || !monthStr.includes("-")) return monthStr;
+  const [y, m] = monthStr.split("-");
+  const date = new Date(Number(y), Number(m) - 1, 1);
+  const name = date.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  return name.charAt(0).toUpperCase() + name.slice(1);
+};
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<boolean>(false);
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -64,7 +77,7 @@ export default function AdminPage() {
   const [manualService, setManualService] = useState<string>(SERVICES[0].name);
   const [manualPrice, setManualPrice] = useState<number>(SERVICES[0].price);
 
-  // Modal Historial
+  // Modal Historial del Cliente
   const [selectedClientHistory, setSelectedClientHistory] = useState<{
     name: string;
     phone: string;
@@ -73,9 +86,13 @@ export default function AdminPage() {
     history: Appointment[];
   } | null>(null);
 
-  // Modal Cancelación con WhatsApp
+  // Modal Cancelación
   const [cancelModalApp, setCancelModalApp] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState<string>("un imprevisto de fuerza mayor");
+
+  // Modal Esquema Interactivo Mensual
+  const [showMonthlyModal, setShowMonthlyModal] = useState<boolean>(false);
+  const [selectedStatsMonth, setSelectedStatsMonth] = useState<string>("");
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
@@ -84,6 +101,7 @@ export default function AdminPage() {
     setSelectedDate(today);
     setBlockDate(today);
     setManualDate(today);
+    setSelectedStatsMonth(today.substring(0, 7));
 
     const sessionAuth = sessionStorage.getItem("jbarbers_auth");
     if (sessionAuth === "true") {
@@ -91,9 +109,34 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchAllData = async () => {
+    setLoading(true);
+    // 1. Citas del día seleccionado
+    const { data: dayData } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("booking_date", selectedDate)
+      .order("booking_time", { ascending: true });
+
+    if (dayData) {
+      setAppointments(dayData as Appointment[]);
+    }
+
+    // 2. Todas las citas para cálculo mensual y anual
+    const { data: allData } = await supabase
+      .from("appointments")
+      .select("*")
+      .order("booking_date", { ascending: false });
+
+    if (allData) {
+      setAllAppointments(allData as Appointment[]);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (isAuthenticated && selectedDate) {
-      fetchDayAppointments();
+      fetchAllData();
     }
   }, [isAuthenticated, selectedDate]);
 
@@ -109,20 +152,6 @@ export default function AdminPage() {
     }
   };
 
-  const fetchDayAppointments = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("appointments")
-      .select("*")
-      .eq("booking_date", selectedDate)
-      .order("booking_time", { ascending: true });
-
-    if (!error && data) {
-      setAppointments(data as Appointment[]);
-    }
-    setLoading(false);
-  };
-
   const updateStatus = async (id: string, newStatus: Appointment["status"]) => {
     const { error } = await supabase
       .from("appointments")
@@ -131,6 +160,9 @@ export default function AdminPage() {
 
     if (!error) {
       setAppointments((prev) =>
+        prev.map((app) => (app.id === id ? { ...app, status: newStatus } : app))
+      );
+      setAllAppointments((prev) =>
         prev.map((app) => (app.id === id ? { ...app, status: newStatus } : app))
       );
     }
@@ -146,10 +178,10 @@ export default function AdminPage() {
     const { error } = await supabase.from("appointments").delete().eq("id", id);
     if (!error) {
       setAppointments((prev) => prev.filter((app) => app.id !== id));
+      setAllAppointments((prev) => prev.filter((app) => app.id !== id));
     }
   };
 
-  // 1. CANCELACIÓN CON AVISO POR WHATSAPP AL CLIENTE
   const handleConfirmCancellation = async (sendWhatsApp: boolean) => {
     if (!cancelModalApp) return;
 
@@ -162,7 +194,7 @@ export default function AdminPage() {
 
       const text =
         `💈 *AVISO DE CANCELACIÓN - JBARBERS* 💈\n\n` +
-        `¡Buenas, *${cancelModalApp.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita de hoy/el día *${cancelModalApp.booking_date}* a las *${cancelModalApp.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
+        `¡Buenas, *${cancelModalApp.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita del día *${cancelModalApp.booking_date}* a las *${cancelModalApp.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
         `🙏 Te pido mil disculpas por el contratiempo. Puedes volver a pedir cita en cualquier otro hueco libre entrando aquí:\n` +
         `👉 ${webUrl}\n\n` +
         `O si lo prefieres, dime qué otra hora te vendría bien y te busco un hueco. ¡Muchas gracias por la comprensión!`;
@@ -173,7 +205,6 @@ export default function AdminPage() {
     setCancelModalApp(null);
   };
 
-  // 2. AVISAR RETRASO DE 10-15 MINUTOS
   const handleSendDelayNotice = (app: Appointment) => {
     if (app.client_phone === "En local") return;
 
@@ -188,7 +219,6 @@ export default function AdminPage() {
     window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  // CERRAR Y REABRIR DÍAS ENTEROS
   const handleCloseEntireDay = async () => {
     const reason = window.prompt("Motivo del cierre:", "Festivo / Vacaciones / Jarramplas");
     if (!reason) return;
@@ -205,7 +235,7 @@ export default function AdminPage() {
     }));
 
     await supabase.from("appointments").insert(inserts);
-    await fetchDayAppointments();
+    await fetchAllData();
   };
 
   const handleReopenEntireDay = async () => {
@@ -218,7 +248,7 @@ export default function AdminPage() {
       .eq("booking_date", selectedDate)
       .like("client_name", "[BLOQUEADO]%");
 
-    await fetchDayAppointments();
+    await fetchAllData();
   };
 
   const handleShareStorySlot = (slotTime: string) => {
@@ -278,6 +308,86 @@ export default function AdminPage() {
     setSelectedDate(d.toISOString().split("T")[0]);
   };
 
+  // CÁLCULOS DEL DÍA SELECCIONADO
+  const activeAppointments = appointments.filter(
+    (a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]")
+  );
+  const totalDayRevenue = activeAppointments.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+
+  // CÁLCULO DE LA CAJA DEL MES ACTUAL (del mes de la fecha seleccionada)
+  const currentMonthKey = selectedDate.substring(0, 7);
+  const currentMonthApps = useMemo(() => {
+    return allAppointments.filter(
+      (a) =>
+        a.booking_date.startsWith(currentMonthKey) &&
+        a.status !== "cancelled" &&
+        !a.client_name.startsWith("[BLOQUEADO]")
+    );
+  }, [allAppointments, currentMonthKey]);
+
+  const totalCurrentMonthRevenue = useMemo(() => {
+    return currentMonthApps.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+  }, [currentMonthApps]);
+
+  // CÁLCULOS DEL ESQUEMA INTERACTIVO MENSUAL
+  const activeMonthKey = selectedStatsMonth || currentMonthKey;
+  const filteredMonthApps = useMemo(() => {
+    return allAppointments.filter(
+      (a) =>
+        a.booking_date.startsWith(activeMonthKey) &&
+        a.status !== "cancelled" &&
+        !a.client_name.startsWith("[BLOQUEADO]")
+    );
+  }, [allAppointments, activeMonthKey]);
+
+  const activeMonthRevenue = useMemo(() => {
+    return filteredMonthApps.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+  }, [filteredMonthApps]);
+
+  const activeMonthAverageTicket = filteredMonthApps.length > 0
+    ? (activeMonthRevenue / filteredMonthApps.length).toFixed(1)
+    : "0";
+
+  // Servicio estrella del mes
+  const topServiceOfMonth = useMemo(() => {
+    if (filteredMonthApps.length === 0) return { name: "Sin datos", count: 0 };
+    const counts: Record<string, number> = {};
+    filteredMonthApps.forEach((a) => {
+      counts[a.service_name] = (counts[a.service_name] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return { name: sorted[0][0], count: sorted[0][1] };
+  }, [filteredMonthApps]);
+
+  // Historial de todos los meses registrados para la gráfica interactiva
+  const monthlyHistory = useMemo(() => {
+    const map: Record<string, { monthKey: string; revenue: number; cuts: number }> = {};
+    allAppointments
+      .filter((a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]"))
+      .forEach((a) => {
+        const m = a.booking_date.substring(0, 7);
+        if (!map[m]) map[m] = { monthKey: m, revenue: 0, cuts: 0 };
+        map[m].revenue += Number(a.price) || 0;
+        map[m].cuts += 1;
+      });
+
+    const list = Object.values(map).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    // Asegurarse de que el mes actual esté aunque tenga 0 €
+    if (!map[currentMonthKey]) {
+      list.push({ monthKey: currentMonthKey, revenue: 0, cuts: 0 });
+    }
+    return list;
+  }, [allAppointments, currentMonthKey]);
+
+  const maxHistoricalRevenue = useMemo(() => {
+    const max = Math.max(...monthlyHistory.map((m) => m.revenue), 100);
+    return max;
+  }, [monthlyHistory]);
+
+  const bookedTimeMap = new Map(appointments.map((a) => [a.booking_time, a]));
+  const allBlocked = allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
+
+  // DETECCIÓN DE HORAS DUPLICADAS
   const activeAppsForDuplicateCheck = appointments.filter((a) => a.status !== "cancelled");
   const timeOccurrences = activeAppsForDuplicateCheck.reduce((acc, curr) => {
     acc[curr.booking_time] = (acc[curr.booking_time] || 0) + 1;
@@ -293,14 +403,6 @@ export default function AdminPage() {
       a.service_name.toLowerCase().includes(term)
     );
   });
-
-  const activeAppointments = filteredAppointments.filter(
-    (a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]")
-  );
-  const totalRevenue = activeAppointments.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-
-  const bookedTimeMap = new Map(appointments.map((a) => [a.booking_time, a]));
-  const allBlocked = allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
 
   if (!isAuthenticated) {
     return (
@@ -349,7 +451,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center">
-      {/* BARBER POLE TRADICIONAL ANIMADO */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes barberPoleMove {
           0% { background-position: 0 0; }
@@ -381,7 +482,7 @@ export default function AdminPage() {
         }
       ` }} />
 
-      {/* TIRA DE BARBER POLE CLÁSICA */}
+      {/* TIRA DE BARBER POLE */}
       <div className="w-full max-w-2xl h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
       {/* CINTA MARQUEE */}
@@ -390,11 +491,13 @@ export default function AdminPage() {
           <div className="flex items-center gap-6 whitespace-nowrap">
             <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
             <span>•</span>
-            <span>📅 DÍA: {selectedDate}</span>
+            <span>📅 {selectedDate}</span>
             <span>•</span>
-            <span>👥 {activeAppointments.length} CITAS ACTIVAS</span>
+            <span>👥 {activeAppointments.length} HOY</span>
             <span>•</span>
-            <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
+            <span className="text-emerald-400 font-bold">💰 HOY: {totalDayRevenue} €</span>
+            <span>•</span>
+            <span className="text-amber-300 font-bold">📈 MES: {totalCurrentMonthRevenue} €</span>
             <span>•</span>
             <span>📍 PIORNAL</span>
             <span>•</span>
@@ -402,11 +505,13 @@ export default function AdminPage() {
           <div className="flex items-center gap-6 whitespace-nowrap pl-6">
             <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
             <span>•</span>
-            <span>📅 DÍA: {selectedDate}</span>
+            <span>📅 {selectedDate}</span>
             <span>•</span>
-            <span>👥 {activeAppointments.length} CITAS ACTIVAS</span>
+            <span>👥 {activeAppointments.length} HOY</span>
             <span>•</span>
-            <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
+            <span className="text-emerald-400 font-bold">💰 HOY: {totalDayRevenue} €</span>
+            <span>•</span>
+            <span className="text-amber-300 font-bold">📈 MES: {totalCurrentMonthRevenue} €</span>
             <span>•</span>
             <span>📍 PIORNAL</span>
             <span>•</span>
@@ -419,7 +524,7 @@ export default function AdminPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-amber-400 tracking-wider">JBARBERS • AGENDA</h1>
-            <p className="text-[11px] text-zinc-400">Control de clientes y avisos</p>
+            <p className="text-[11px] text-zinc-400">Control de citas y facturación</p>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -445,7 +550,7 @@ export default function AdminPage() {
             </button>
 
             <button
-              onClick={fetchDayAppointments}
+              onClick={fetchAllData}
               className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg transition"
               title="Refrescar"
             >
@@ -502,10 +607,53 @@ export default function AdminPage() {
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        {/* TIMELINE VISUAL */}
+        {/* TARJETAS DE CAJA: HOY + CAJA DEL MES CON BOTÓN AL ESQUEMA */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* CAJA DE HOY */}
+          <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
+            <div className="flex items-center justify-between text-zinc-400 text-xs">
+              <span>Caja de Hoy</span>
+              <span className="text-emerald-400 font-black text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                {activeAppointments.length} cortes
+              </span>
+            </div>
+            <p className="text-2xl font-black text-emerald-400 mt-1">{totalDayRevenue} €</p>
+          </div>
+
+          {/* CAJA DEL MES CON ACCESO AL ESQUEMA INTERACTIVO */}
+          <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/30 border border-amber-500/30 p-3.5 rounded-2xl shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-amber-400 font-bold flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5" /> Caja del Mes
+              </span>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {currentMonthApps.length} cortes
+              </span>
+            </div>
+
+            <div className="my-1">
+              <p className="text-2xl font-black text-amber-300">{totalCurrentMonthRevenue} €</p>
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectedStatsMonth(currentMonthKey);
+                setShowMonthlyModal(true);
+              }}
+              className="w-full mt-1 py-1.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 border border-amber-500/30 rounded-xl text-[11px] font-bold text-amber-300 flex items-center justify-between transition"
+            >
+              <span className="flex items-center gap-1">
+                <BarChart3 className="w-3 h-3" /> Ver Esquema Mensual
+              </span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* TIMELINE VISUAL DE LA JORNADA */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2 shadow-lg">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-zinc-200">Distribución de horas</span>
+            <span className="font-bold text-zinc-200">Distribución de horas del día</span>
             <div className="flex items-center gap-2 text-[10px] text-zinc-400">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Libre</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Ocupada</span>
@@ -558,30 +706,11 @@ export default function AdminPage() {
           />
         </div>
 
-        {/* CAJA Y CLIENTES */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 text-xs">
-              <span>Clientes activos</span>
-              <Users className="w-4 h-4 text-amber-400" />
-            </div>
-            <p className="text-2xl font-black text-zinc-100 mt-1">{activeAppointments.length}</p>
-          </div>
-
-          <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 text-xs">
-              <span>Caja estimada</span>
-              <span className="text-emerald-400 font-black text-xs">EUR</span>
-            </div>
-            <p className="text-2xl font-black text-emerald-400 mt-1">{totalRevenue} €</p>
-          </div>
-        </div>
-
         {/* LISTADO DE CITAS */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Agenda ({filteredAppointments.length})
+              Agenda del día ({filteredAppointments.length})
             </h2>
             <span className="text-[11px] text-zinc-500 font-semibold">{selectedDate}</span>
           </div>
@@ -590,7 +719,7 @@ export default function AdminPage() {
             <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda...</div>
           ) : filteredAppointments.length === 0 ? (
             <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-2">
-              <p>No hay citas ni bloqueos para este día.</p>
+              <p>No hay citas ni bloqueos registrados para este día.</p>
               <button
                 onClick={() => {
                   setManualDate(selectedDate);
@@ -721,7 +850,6 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* ACCIONES Y BOTONES DE WHATSAPP / RETRASO */}
                   <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
                     {app.client_phone !== "En local" && app.status !== "cancelled" ? (
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -775,6 +903,144 @@ export default function AdminPage() {
           )}
         </div>
       </main>
+
+      {/* MODAL: ESQUEMA INTERACTIVO MENSUAL (RECAUDACIÓN & RENDIMIENTO) */}
+      {showMonthlyModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.25)] max-h-[90vh] flex flex-col">
+            {/* CABECERA MODAL */}
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-zinc-100">Esquema Mensual de Caja</h3>
+                  <p className="text-[10px] text-amber-400 font-semibold">{getMonthLabel(activeMonthKey)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMonthlyModal(false)}
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded-xl hover:bg-zinc-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto pr-1 space-y-4 flex-1">
+              {/* SELECTOR INTERACTIVO DE MESES (BAR CHARTS INTERACTIVO) */}
+              <div className="bg-zinc-950/80 p-3 rounded-2xl border border-zinc-800 space-y-2">
+                <span className="text-[11px] font-bold text-zinc-400">Selecciona o compara meses:</span>
+                
+                <div className="flex items-end gap-2 pt-4 pb-1 h-32 px-2 overflow-x-auto">
+                  {monthlyHistory.map((m) => {
+                    const isSelected = m.monthKey === activeMonthKey;
+                    const heightPercent = Math.max(Math.round((m.revenue / maxHistoricalRevenue) * 100), 12);
+
+                    return (
+                      <button
+                        key={m.monthKey}
+                        onClick={() => setSelectedStatsMonth(m.monthKey)}
+                        className="flex-1 min-w-[50px] flex flex-col items-center justify-end h-full group transition"
+                      >
+                        <span className={`text-[10px] font-bold mb-1 transition ${isSelected ? "text-amber-400" : "text-zinc-500 group-hover:text-zinc-300"}`}>
+                          {m.revenue}€
+                        </span>
+                        
+                        <div className="w-full bg-zinc-850 rounded-t-lg overflow-hidden flex items-end h-20 p-0.5">
+                          <div
+                            style={{ height: `${heightPercent}%` }}
+                            className={`w-full rounded-t transition-all duration-300 ${
+                              isSelected
+                                ? "bg-gradient-to-t from-amber-600 via-amber-500 to-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]"
+                                : "bg-zinc-700 hover:bg-zinc-600"
+                            }`}
+                          />
+                        </div>
+
+                        <span className={`text-[9px] font-mono mt-1 transition ${isSelected ? "text-amber-400 font-bold" : "text-zinc-500"}`}>
+                          {m.monthKey.slice(5)}/{m.monthKey.slice(2, 4)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* MÉTRICAS CLAVE DEL MES SELECCIONADO */}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Total Caja</p>
+                  <p className="text-base font-black text-amber-400 mt-0.5">{activeMonthRevenue} €</p>
+                </div>
+
+                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Cortes</p>
+                  <p className="text-base font-black text-zinc-100 mt-0.5">{filteredMonthApps.length}</p>
+                </div>
+
+                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Ticket Medio</p>
+                  <p className="text-base font-black text-emerald-400 mt-0.5">{activeMonthAverageTicket} €</p>
+                </div>
+              </div>
+
+              {/* SERVICIO ESTRELLA */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 p-3 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Corte Más Pedido</p>
+                    <p className="text-xs font-bold text-zinc-100">{topServiceOfMonth.name}</p>
+                  </div>
+                </div>
+                <span className="text-xs font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-md">
+                  {topServiceOfMonth.count} veces
+                </span>
+              </div>
+
+              {/* LISTA COMPLETA DE TRABAJOS DE ESTE MES */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-bold text-zinc-300">
+                  Detalle de citas de {getMonthLabel(activeMonthKey)} ({filteredMonthApps.length}):
+                </p>
+                
+                {filteredMonthApps.length === 0 ? (
+                  <p className="text-xs text-zinc-500 italic p-3 bg-zinc-950 rounded-xl text-center">
+                    No hay citas registradas en este mes.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {filteredMonthApps.map((a) => (
+                      <div
+                        key={a.id}
+                        className="p-2.5 bg-zinc-950 rounded-xl border border-zinc-850 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <p className="font-bold text-zinc-200">{a.client_name}</p>
+                          <p className="text-[10px] text-zinc-500">
+                            {a.booking_date} a las {a.booking_time} h • {a.service_name}
+                          </p>
+                        </div>
+                        <span className="font-black text-emerald-400">{a.price} €</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowMonthlyModal(false)}
+              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 rounded-xl text-xs font-bold transition"
+            >
+              Cerrar Esquema
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: ANULAR CITA Y AVISAR POR WHATSAPP */}
       {cancelModalApp && (
@@ -886,7 +1152,7 @@ export default function AdminPage() {
                 },
               ]);
               setShowBlockModal(false);
-              fetchDayAppointments();
+              fetchAllData();
             }}
             className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
           >
@@ -966,7 +1232,7 @@ export default function AdminPage() {
               setShowManualModal(false);
               setManualName("");
               setManualPhone("");
-              fetchDayAppointments();
+              fetchAllData();
             }}
             className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
           >
