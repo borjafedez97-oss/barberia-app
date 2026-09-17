@@ -196,14 +196,31 @@ export default function BookingPage() {
 
     setNextAvailableToday(validSlotsToday.length > 0 ? validSlotsToday[0] : null);
     
-    // Suave retardo para exhibir el esqueleto dorado
     setTimeout(() => {
       setLoadingSlots(false);
     }, 280);
   };
 
+  // SINCRONIZACIÓN EN TIEMPO REAL CON SUPABASE REALTIME
   useEffect(() => {
+    if (!selectedDate) return;
+
     fetchOccupiedSlots();
+
+    const channel = supabase
+      .channel(`client-realtime-${selectedDate}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchOccupiedSlots();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [selectedDate]);
 
   // Manejador del Aura del Logo (Mantener pulsado)
@@ -342,7 +359,7 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-36 relative overflow-x-hidden">
       
-      {/* ESTILOS DE ANIMACIONES: SLIDE TRANSITIONS + CHROME METALLIC + SNIP + SKELETON */}
+      {/* ESTILOS DE ANIMACIONES */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -443,7 +460,7 @@ export default function BookingPage() {
           z-index: 1;
         }
 
-        /* 1. SLIDE TRANSITIONS ESTILO IPHONE */
+        /* SLIDE TRANSITIONS */
         @keyframes slideInFromRight {
           0% { opacity: 0; transform: translate3d(28px, 0, 0); }
           100% { opacity: 1; transform: translate3d(0, 0, 0); }
@@ -459,7 +476,7 @@ export default function BookingPage() {
           animation: slideInFromLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* 2. EFECTO ESPEJO CROMADO */
+        /* BRILLO CROMADO */
         @keyframes chromeShine {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
@@ -473,7 +490,7 @@ export default function BookingPage() {
           animation: chromeShine 6s ease-in-out infinite;
         }
 
-        /* 3. MICRO-INTERACCIONES EN ICONOS */
+        /* MICRO-INTERACCIONES */
         @keyframes snipCut {
           0% { transform: rotate(0deg); }
           25% { transform: rotate(-18deg) scale(1.15); }
@@ -506,7 +523,7 @@ export default function BookingPage() {
           animation: ringTel 0.5s ease-in-out;
         }
 
-        /* 4. ESQUELETO DORADO */
+        /* ESQUELETO DORADO */
         @keyframes goldSkeletonSweep {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -518,7 +535,6 @@ export default function BookingPage() {
         }
       ` }} />
 
-      {/* POLVO DORADO FLOTANTE */}
       <div className="gold-dust" style={{ top: "25%", left: "15%", animation: "floatDust 6s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "45%", left: "80%", animation: "floatDust 8s 1.5s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "70%", left: "30%", animation: "floatDust 7s 3s infinite ease-in-out" }} />
@@ -556,9 +572,8 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* HEADER CON AURA REACTIVA AL MANTENER PULSADO EL LOGO */}
+      {/* HEADER DE PORTADA */}
       <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl transition-all duration-700">
-        {/* AURA EXPANSIVA DEL LOGO (MEJORA 5) */}
         {logoAuraActive && (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(245,158,11,0.55)_0%,rgba(245,158,11,0.15)_50%,transparent_80%)] z-10 pointer-events-none animate-pulse" />
         )}
@@ -594,7 +609,7 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* LOGO CON DETECCIÓN DE PULSACIÓN PROLONGADA */}
+        {/* LOGO */}
         <div className="relative -mt-16 px-5 pb-4 text-center flex flex-col items-center z-20">
           <div 
             onTouchStart={handleLogoTouchStart}
@@ -614,7 +629,6 @@ export default function BookingPage() {
             />
           </div>
 
-          {/* TÍTULO CON EFECTO ESPEJO CROMADO (MEJORA 2) */}
           <h1 className="text-2xl font-black tracking-wider uppercase chrome-gold-text drop-shadow-md">
             {BARBER_INFO.name}
           </h1>
@@ -622,7 +636,6 @@ export default function BookingPage() {
             Cortes degradados, estilo urbano y perfilado clásico
           </p>
 
-          {/* BOTONES Y PINES LOCALES */}
           <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
             <a
               href={BARBER_INFO.mapsUrl}
@@ -646,7 +659,7 @@ export default function BookingPage() {
               <span>@{BARBER_INFO.instagram}</span>
             </a>
 
-            {/* PINES METÁLICOS DISCRETOS */}
+            {/* PINES METÁLICOS */}
             <div 
               className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 p-0.5 shadow-md flex items-center justify-center hover:scale-110 active:scale-90 transition-transform cursor-pointer"
               title="C.F. Piornal"
@@ -698,7 +711,7 @@ export default function BookingPage() {
         )}
       </header>
 
-      {/* CONTENIDO PRINCIPAL CON TRANSICIÓN CINEMÁTICA SLIDE (MEJORA 1) */}
+      {/* CUERPO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
         {/* PASO 1: SELECCIONAR SERVICIO */}
@@ -753,7 +766,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 2: HORARIOS CON ESQUELETO DORADO (MEJORA 4) */}
+        {/* PASO 2: HORARIOS */}
         {step === 2 && selectedService && (
           <div className={`space-y-5 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <div className="flex items-center justify-between">
@@ -797,7 +810,6 @@ export default function BookingPage() {
             </div>
 
             {loadingSlots ? (
-              /* ESQUELETO DORADO DE CARGA */
               <div className="space-y-4">
                 <div className="p-3 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-2">
                   <div className="w-28 h-3.5 rounded golden-skeleton" />

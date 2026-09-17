@@ -77,7 +77,7 @@ export default function AdminPage() {
   const [manualService, setManualService] = useState<string>(SERVICES[0].name);
   const [manualPrice, setManualPrice] = useState<number>(SERVICES[0].price);
 
-  // Modal Historial del Cliente
+  // Modal Historial
   const [selectedClientHistory, setSelectedClientHistory] = useState<{
     name: string;
     phone: string;
@@ -90,7 +90,7 @@ export default function AdminPage() {
   const [cancelModalApp, setCancelModalApp] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState<string>("un imprevisto de fuerza mayor");
 
-  // Modal Esquema Interactivo Mensual
+  // Modal Esquema Mensual
   const [showMonthlyModal, setShowMonthlyModal] = useState<boolean>(false);
   const [selectedStatsMonth, setSelectedStatsMonth] = useState<string>("");
 
@@ -110,8 +110,9 @@ export default function AdminPage() {
   }, []);
 
   const fetchAllData = async () => {
+    if (!selectedDate) return;
     setLoading(true);
-    // 1. Citas del día seleccionado
+
     const { data: dayData } = await supabase
       .from("appointments")
       .select("*")
@@ -122,7 +123,6 @@ export default function AdminPage() {
       setAppointments(dayData as Appointment[]);
     }
 
-    // 2. Todas las citas para cálculo mensual y anual
     const { data: allData } = await supabase
       .from("appointments")
       .select("*")
@@ -134,10 +134,31 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  // 1. CARGA INICIAL
   useEffect(() => {
     if (isAuthenticated && selectedDate) {
       fetchAllData();
     }
+  }, [isAuthenticated, selectedDate]);
+
+  // 2. SINCRONIZACIÓN EN TIEMPO REAL (WEBSOCKETS)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const channel = supabase
+      .channel("admin-realtime-appointments")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchAllData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [isAuthenticated, selectedDate]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -153,21 +174,22 @@ export default function AdminPage() {
   };
 
   const updateStatus = async (id: string, newStatus: Appointment["status"]) => {
+    setAppointments((prev) =>
+      prev.map((app) => (app.id === id ? { ...app, status: newStatus } : app))
+    );
+
     const { error } = await supabase
       .from("appointments")
       .update({ status: newStatus })
       .eq("id", id);
 
-    if (!error) {
-      setAppointments((prev) =>
-        prev.map((app) => (app.id === id ? { ...app, status: newStatus } : app))
-      );
-      setAllAppointments((prev) =>
-        prev.map((app) => (app.id === id ? { ...app, status: newStatus } : app))
-      );
+    if (error) {
+      alert("Error al actualizar estado: " + error.message);
+      fetchAllData();
     }
   };
 
+  // LIBERAR HORA O ELIMINAR CITA
   const handleDeleteAppointment = async (id: string, isBlock: boolean) => {
     const confirmMsg = isBlock
       ? "¿Liberar esta hora para que vuelva a estar disponible en la web?"
@@ -175,11 +197,70 @@ export default function AdminPage() {
 
     if (!window.confirm(confirmMsg)) return;
 
+    // Actualización inmediata en pantalla
+    setAppointments((prev) => prev.filter((app) => app.id !== id));
+    setAllAppointments((prev) => prev.filter((app) => app.id !== id));
+
     const { error } = await supabase.from("appointments").delete().eq("id", id);
-    if (!error) {
-      setAppointments((prev) => prev.filter((app) => app.id !== id));
-      setAllAppointments((prev) => prev.filter((app) => app.id !== id));
+
+    if (error) {
+      alert("Error al eliminar de la base de datos: " + error.message);
+      fetchAllData();
     }
+  };
+
+  // REABRIR DÍA COMPLETO (ELIMINA TODOS LOS BLOQUEOS DE ESE DÍA)
+  const handleReopenEntireDay = async () => {
+    if (!window.confirm(`¿Seguro que deseas reabrir todas las horas del día ${selectedDate}?`)) return;
+
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("booking_date", selectedDate)
+      .ilike("client_name", "%BLOQUEADO%");
+
+    if (error) {
+      alert("Error al reabrir el día: " + error.message);
+    }
+
+    await fetchAllData();
+    setLoading(false);
+  };
+
+  // CERRAR DÍA COMPLETO
+  const handleCloseEntireDay = async () => {
+    const reason = window.prompt("Motivo del cierre:", "Festivo / Vacaciones / Jarramplas");
+    if (!reason) return;
+
+    setLoading(true);
+
+    // Borramos primero bloqueos antiguos si los hubiera para evitar solapamientos
+    await supabase
+      .from("appointments")
+      .delete()
+      .eq("booking_date", selectedDate)
+      .ilike("client_name", "%BLOQUEADO%");
+
+    const inserts = allSlots.map((slot) => ({
+      client_name: `[BLOQUEADO] ${reason.trim()}`,
+      client_phone: BARBER_INFO.phone,
+      service_name: "Día cerrado",
+      price: 0,
+      booking_date: selectedDate,
+      booking_time: slot,
+      status: "confirmed",
+    }));
+
+    const { error } = await supabase.from("appointments").insert(inserts);
+
+    if (error) {
+      alert("Error al cerrar el día: " + error.message);
+    }
+
+    await fetchAllData();
+    setLoading(false);
   };
 
   const handleConfirmCancellation = async (sendWhatsApp: boolean) => {
@@ -217,38 +298,6 @@ export default function AdminPage() {
       `Para que no tengas que estar esperando aquí de pie, puedes venirte con calma sobre las *${app.booking_time}* y cuarto. ¡Disculpa las molestias y nos vemos ahora!`;
 
     window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
-  };
-
-  const handleCloseEntireDay = async () => {
-    const reason = window.prompt("Motivo del cierre:", "Festivo / Vacaciones / Jarramplas");
-    if (!reason) return;
-
-    setLoading(true);
-    const inserts = allSlots.map((slot) => ({
-      client_name: `[BLOQUEADO] ${reason.trim()}`,
-      client_phone: BARBER_INFO.phone,
-      service_name: "Día cerrado",
-      price: 0,
-      booking_date: selectedDate,
-      booking_time: slot,
-      status: "confirmed",
-    }));
-
-    await supabase.from("appointments").insert(inserts);
-    await fetchAllData();
-  };
-
-  const handleReopenEntireDay = async () => {
-    if (!window.confirm(`¿Seguro que deseas reabrir todas las horas del día ${selectedDate}?`)) return;
-
-    setLoading(true);
-    await supabase
-      .from("appointments")
-      .delete()
-      .eq("booking_date", selectedDate)
-      .like("client_name", "[BLOQUEADO]%");
-
-    await fetchAllData();
   };
 
   const handleShareStorySlot = (slotTime: string) => {
@@ -308,13 +357,12 @@ export default function AdminPage() {
     setSelectedDate(d.toISOString().split("T")[0]);
   };
 
-  // CÁLCULOS DEL DÍA SELECCIONADO
+  // CÁLCULOS
   const activeAppointments = appointments.filter(
     (a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]")
   );
   const totalDayRevenue = activeAppointments.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
 
-  // CÁLCULO DE LA CAJA DEL MES ACTUAL (del mes de la fecha seleccionada)
   const currentMonthKey = selectedDate.substring(0, 7);
   const currentMonthApps = useMemo(() => {
     return allAppointments.filter(
@@ -329,7 +377,6 @@ export default function AdminPage() {
     return currentMonthApps.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
   }, [currentMonthApps]);
 
-  // CÁLCULOS DEL ESQUEMA INTERACTIVO MENSUAL
   const activeMonthKey = selectedStatsMonth || currentMonthKey;
   const filteredMonthApps = useMemo(() => {
     return allAppointments.filter(
@@ -348,7 +395,6 @@ export default function AdminPage() {
     ? (activeMonthRevenue / filteredMonthApps.length).toFixed(1)
     : "0";
 
-  // Servicio estrella del mes
   const topServiceOfMonth = useMemo(() => {
     if (filteredMonthApps.length === 0) return { name: "Sin datos", count: 0 };
     const counts: Record<string, number> = {};
@@ -359,7 +405,6 @@ export default function AdminPage() {
     return { name: sorted[0][0], count: sorted[0][1] };
   }, [filteredMonthApps]);
 
-  // Historial de todos los meses registrados para la gráfica interactiva
   const monthlyHistory = useMemo(() => {
     const map: Record<string, { monthKey: string; revenue: number; cuts: number }> = {};
     allAppointments
@@ -372,7 +417,6 @@ export default function AdminPage() {
       });
 
     const list = Object.values(map).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
-    // Asegurarse de que el mes actual esté aunque tenga 0 €
     if (!map[currentMonthKey]) {
       list.push({ monthKey: currentMonthKey, revenue: 0, cuts: 0 });
     }
@@ -380,14 +424,12 @@ export default function AdminPage() {
   }, [allAppointments, currentMonthKey]);
 
   const maxHistoricalRevenue = useMemo(() => {
-    const max = Math.max(...monthlyHistory.map((m) => m.revenue), 100);
-    return max;
+    return Math.max(...monthlyHistory.map((m) => m.revenue), 100);
   }, [monthlyHistory]);
 
   const bookedTimeMap = new Map(appointments.map((a) => [a.booking_time, a]));
-  const allBlocked = allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
+  const allBlocked = allSlots.length > 0 && allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
 
-  // DETECCIÓN DE HORAS DUPLICADAS
   const activeAppsForDuplicateCheck = appointments.filter((a) => a.status !== "cancelled");
   const timeOccurrences = activeAppsForDuplicateCheck.reduce((acc, curr) => {
     acc[curr.booking_time] = (acc[curr.booking_time] || 0) + 1;
@@ -482,14 +524,13 @@ export default function AdminPage() {
         }
       ` }} />
 
-      {/* TIRA DE BARBER POLE */}
       <div className="w-full max-w-2xl h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
       {/* CINTA MARQUEE */}
       <div className="w-full max-w-2xl overflow-hidden bg-zinc-900 border-b border-zinc-800 py-1 select-none text-[10px] text-zinc-400 font-semibold tracking-wider uppercase">
         <div className="admin-marquee">
           <div className="flex items-center gap-6 whitespace-nowrap">
-            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
+            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS EN VIVO</span>
             <span>•</span>
             <span>📅 {selectedDate}</span>
             <span>•</span>
@@ -503,7 +544,7 @@ export default function AdminPage() {
             <span>•</span>
           </div>
           <div className="flex items-center gap-6 whitespace-nowrap pl-6">
-            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS ACTIVO</span>
+            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS EN VIVO</span>
             <span>•</span>
             <span>📅 {selectedDate}</span>
             <span>•</span>
@@ -524,7 +565,7 @@ export default function AdminPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-amber-400 tracking-wider">JBARBERS • AGENDA</h1>
-            <p className="text-[11px] text-zinc-400">Control de citas y facturación</p>
+            <p className="text-[11px] text-zinc-400">Sincronización en tiempo real</p>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -589,7 +630,7 @@ export default function AdminPage() {
             {allBlocked ? (
               <button
                 onClick={handleReopenEntireDay}
-                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/30"
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-md border border-emerald-500/30 transition shadow-sm"
               >
                 🔓 Reabrir día
               </button>
@@ -607,9 +648,8 @@ export default function AdminPage() {
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        {/* TARJETAS DE CAJA: HOY + CAJA DEL MES CON BOTÓN AL ESQUEMA */}
+        {/* CAJAS: HOY Y MES */}
         <div className="grid grid-cols-2 gap-3">
-          {/* CAJA DE HOY */}
           <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-zinc-400 text-xs">
               <span>Caja de Hoy</span>
@@ -620,7 +660,6 @@ export default function AdminPage() {
             <p className="text-2xl font-black text-emerald-400 mt-1">{totalDayRevenue} €</p>
           </div>
 
-          {/* CAJA DEL MES CON ACCESO AL ESQUEMA INTERACTIVO */}
           <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/30 border border-amber-500/30 p-3.5 rounded-2xl shadow-lg relative overflow-hidden flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs">
               <span className="text-amber-400 font-bold flex items-center gap-1">
@@ -716,7 +755,7 @@ export default function AdminPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda...</div>
+            <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda en vivo...</div>
           ) : filteredAppointments.length === 0 ? (
             <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-2">
               <p>No hay citas ni bloqueos registrados para este día.</p>
@@ -755,8 +794,8 @@ export default function AdminPage() {
 
                     <button
                       onClick={() => handleDeleteAppointment(app.id, true)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition"
-                      title="Desbloquear hora"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition active:scale-95"
+                      title="Liberar hora"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Liberar</span>
@@ -904,11 +943,10 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* MODAL: ESQUEMA INTERACTIVO MENSUAL (RECAUDACIÓN & RENDIMIENTO) */}
+      {/* MODAL: ESQUEMA INTERACTIVO MENSUAL */}
       {showMonthlyModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="w-full max-w-lg bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.25)] max-h-[90vh] flex flex-col">
-            {/* CABECERA MODAL */}
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -928,7 +966,6 @@ export default function AdminPage() {
             </div>
 
             <div className="overflow-y-auto pr-1 space-y-4 flex-1">
-              {/* SELECTOR INTERACTIVO DE MESES (BAR CHARTS INTERACTIVO) */}
               <div className="bg-zinc-950/80 p-3 rounded-2xl border border-zinc-800 space-y-2">
                 <span className="text-[11px] font-bold text-zinc-400">Selecciona o compara meses:</span>
                 
@@ -967,7 +1004,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* MÉTRICAS CLAVE DEL MES SELECCIONADO */}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
                   <p className="text-[10px] text-zinc-500 uppercase font-semibold">Total Caja</p>
@@ -985,7 +1021,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* SERVICIO ESTRELLA */}
               <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 p-3 rounded-2xl flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
@@ -1001,7 +1036,6 @@ export default function AdminPage() {
                 </span>
               </div>
 
-              {/* LISTA COMPLETA DE TRABAJOS DE ESTE MES */}
               <div className="space-y-1.5">
                 <p className="text-xs font-bold text-zinc-300">
                   Detalle de citas de {getMonthLabel(activeMonthKey)} ({filteredMonthApps.length}):
@@ -1042,7 +1076,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* MODAL: ANULAR CITA Y AVISAR POR WHATSAPP */}
+      {/* MODAL: ANULAR CITA */}
       {cancelModalApp && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
@@ -1065,7 +1099,7 @@ export default function AdminPage() {
                 type="text"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Ej: un imprevisto médico, corte de luz..."
+                placeholder="Ej: un imprevisto médico, descanso..."
                 className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -1140,7 +1174,7 @@ export default function AdminPage() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await supabase.from("appointments").insert([
+              const { error } = await supabase.from("appointments").insert([
                 {
                   client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
                   client_phone: BARBER_INFO.phone,
@@ -1151,6 +1185,7 @@ export default function AdminPage() {
                   status: "confirmed",
                 },
               ]);
+              if (error) alert("Error al bloquear: " + error.message);
               setShowBlockModal(false);
               fetchAllData();
             }}
@@ -1217,7 +1252,7 @@ export default function AdminPage() {
               e.preventDefault();
               if (!manualName.trim()) return;
 
-              await supabase.from("appointments").insert([
+              const { error } = await supabase.from("appointments").insert([
                 {
                   client_name: manualName.trim(),
                   client_phone: manualPhone.trim() || "En local",
@@ -1228,6 +1263,8 @@ export default function AdminPage() {
                   status: "confirmed",
                 },
               ]);
+
+              if (error) alert("Error al guardar cita: " + error.message);
 
               setShowManualModal(false);
               setManualName("");
