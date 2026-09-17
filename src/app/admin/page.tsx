@@ -13,12 +13,14 @@ import {
   MessageCircle, 
   Users, 
   RefreshCw,
-  PlusCircle,
   AlertCircle,
   Trash2,
   Search,
   UserPlus,
-  ShieldBan
+  ShieldBan,
+  Share2,
+  History,
+  CalendarX2
 } from "lucide-react";
 
 interface Appointment {
@@ -46,13 +48,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Modal para Bloquear Hora
+  // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
   const [blockDate, setBlockDate] = useState<string>("");
   const [blockTime, setBlockTime] = useState<string>("10:00");
   const [blockReason, setBlockReason] = useState<string>("Descanso / Asunto propio");
 
-  // Modal para Añadir Cita Manual (cliente por teléfono o en persona)
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
   const [manualName, setManualName] = useState<string>("");
   const [manualPhone, setManualPhone] = useState<string>("");
@@ -60,6 +61,15 @@ export default function AdminPage() {
   const [manualTime, setManualTime] = useState<string>("16:00");
   const [manualService, setManualService] = useState<string>(SERVICES[0].name);
   const [manualPrice, setManualPrice] = useState<number>(SERVICES[0].price);
+
+  // Modal Historial de Cliente
+  const [selectedClientHistory, setSelectedClientHistory] = useState<{
+    name: string;
+    phone: string;
+    totalVisits: number;
+    totalSpent: number;
+    history: Appointment[];
+  } | null>(null);
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
@@ -120,75 +130,87 @@ export default function AdminPage() {
     }
   };
 
-  // DESBLOQUEAR / ELIMINAR CITA O BLOQUEO
   const handleDeleteAppointment = async (id: string, isBlock: boolean) => {
-    const confirmMessage = isBlock
-      ? "¿Quieres desbloquear esta hora para que vuelva a estar libre en la web?"
-      : "¿Seguro que deseas eliminar esta cita por completo de la agenda?";
+    const confirmMsg = isBlock
+      ? "¿Liberar esta hora para que vuelva a estar disponible en la web?"
+      : "¿Eliminar esta cita por completo de la agenda?";
 
-    if (!window.confirm(confirmMessage)) return;
+    if (!window.confirm(confirmMsg)) return;
 
     const { error } = await supabase.from("appointments").delete().eq("id", id);
-
     if (!error) {
       setAppointments((prev) => prev.filter((app) => app.id !== id));
     }
   };
 
-  // GUARDAR BLOQUEO MANUAL
-  const handleBlockSlot = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.from("appointments").insert([
-      {
-        client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
-        client_phone: BARBER_INFO.phone,
-        service_name: "Hora bloqueada",
-        price: 0,
-        booking_date: blockDate,
-        booking_time: blockTime,
-        status: "confirmed",
-      },
-    ]);
+  // CERRAR DÍA COMPLETO (Festivo / Jarramplas / Vacaciones)
+  const handleCloseEntireDay = async () => {
+    const reason = window.prompt("Motivo del cierre de día:", "Festivo / Vacaciones / Jarramplas");
+    if (!reason) return;
 
-    if (!error) {
-      setShowBlockModal(false);
-      if (blockDate === selectedDate) {
-        fetchDayAppointments();
-      } else {
-        setSelectedDate(blockDate);
-      }
+    setLoading(true);
+    const inserts = allSlots.map((slot) => ({
+      client_name: `[BLOQUEADO] ${reason.trim()}`,
+      client_phone: BARBER_INFO.phone,
+      service_name: "Día completo cerrado",
+      price: 0,
+      booking_date: selectedDate,
+      booking_time: slot,
+      status: "confirmed",
+    }));
+
+    await supabase.from("appointments").insert(inserts);
+    await fetchDayAppointments();
+  };
+
+  // REABRIR DÍA COMPLETO
+  const handleReopenEntireDay = async () => {
+    if (!window.confirm(`¿Seguro que deseas desbloquear y reabrir todas las horas del día ${selectedDate}?`)) return;
+
+    setLoading(true);
+    await supabase
+      .from("appointments")
+      .delete()
+      .eq("booking_date", selectedDate)
+      .like("client_name", "[BLOQUEADO]%");
+
+    await fetchDayAppointments();
+  };
+
+  // COMPARTIR HUECO LIBRE EN INSTAGRAM STORY
+  const handleShareStorySlot = (slotTime: string) => {
+    const text =
+      `🚨 ¡HUECO LIBRE DE ÚLTIMA HORA! 💈\n` +
+      `📅 Hoy a las ${slotTime} h en JBarbers Piornal.\n\n` +
+      `📲 Pide la cita antes de que vuele en el enlace de la bio o en nuestra web:`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      alert(`¡Texto copiado al portapapeles!\n\nPégalo en tu Story de Instagram:\n\n"${text}"`);
     }
   };
 
-  // GUARDAR CITA MANUAL
-  const handleCreateManualBooking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualName.trim()) {
-      alert("Introduce el nombre del cliente.");
-      return;
-    }
+  // CONSULTAR HISTORIAL DEL CLIENTE
+  const handleViewClientHistory = async (app: Appointment) => {
+    if (app.client_phone === "En local" || app.client_name.startsWith("[BLOQUEADO]")) return;
 
-    const { error } = await supabase.from("appointments").insert([
-      {
-        client_name: manualName.trim(),
-        client_phone: manualPhone.trim() || "En local",
-        service_name: manualService,
-        price: manualPrice,
-        booking_date: manualDate,
-        booking_time: manualTime,
-        status: "confirmed",
-      },
-    ]);
+    const { data } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("client_phone", app.client_phone)
+      .order("booking_date", { ascending: false });
 
-    if (!error) {
-      setShowManualModal(false);
-      setManualName("");
-      setManualPhone("");
-      if (manualDate === selectedDate) {
-        fetchDayAppointments();
-      } else {
-        setSelectedDate(manualDate);
-      }
+    if (data) {
+      const active = data.filter((d) => d.status !== "cancelled");
+      const spent = active.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+
+      setSelectedClientHistory({
+        name: app.client_name,
+        phone: app.client_phone,
+        totalVisits: active.length,
+        totalSpent: spent,
+        history: data as Appointment[],
+      });
     }
   };
 
@@ -209,7 +231,6 @@ export default function AdminPage() {
     window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  // CAMBIO RÁPIDO DE FECHAS
   const setQuickDate = (daysOffset: number) => {
     const d = new Date();
     d.setDate(d.getDate() + daysOffset);
@@ -217,7 +238,6 @@ export default function AdminPage() {
     setSelectedDate(iso);
   };
 
-  // FILTRAR POR BÚSQUEDA
   const filteredAppointments = appointments.filter((a) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
@@ -228,10 +248,14 @@ export default function AdminPage() {
     );
   });
 
-  const activeAppointments = filteredAppointments.filter((a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]"));
+  const activeAppointments = filteredAppointments.filter(
+    (a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]")
+  );
   const totalRevenue = activeAppointments.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
 
-  // ACCESO CON PIN
+  const bookedTimeMap = new Map(appointments.map((a) => [a.booking_time, a]));
+  const allBlocked = allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
@@ -261,7 +285,7 @@ export default function AdminPage() {
             />
             {pinError && (
               <p className="text-xs text-rose-500 mt-2 flex items-center justify-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" /> PIN incorrecto (Prueba: 1234)
+                <AlertCircle className="w-3.5 h-3.5" /> PIN incorrecto (Por defecto: 1234)
               </p>
             )}
           </div>
@@ -279,12 +303,12 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center">
-      {/* CABECERA SUPERIOR */}
+      {/* CABECERA */}
       <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-bold text-amber-400 tracking-wide">JBARBERS • AGENDA</h1>
-            <p className="text-[11px] text-zinc-400">Control de citas, bloqueos y caja</p>
+            <h1 className="text-base font-bold text-amber-400 tracking-wide">JBARBERS • PANEL</h1>
+            <p className="text-[11px] text-zinc-400">Control de citas y agenda</p>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -319,39 +343,104 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* SELECTOR RÁPIDO DE DÍAS */}
-        <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/60">
-          <button
-            onClick={() => setQuickDate(0)}
-            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold rounded-md border border-zinc-700"
-          >
-            Hoy
-          </button>
-          <button
-            onClick={() => setQuickDate(1)}
-            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold rounded-md border border-zinc-700"
-          >
-            Mañana
-          </button>
-          <div className="flex-1 flex items-center justify-end gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-amber-400" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
-            />
+        {/* SELECTOR RÁPIDO DE FECHA Y BOTÓN FESTIVOS */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setQuickDate(0)}
+              className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold rounded-md border border-zinc-700"
+            >
+              Hoy
+            </button>
+            <button
+              onClick={() => setQuickDate(1)}
+              className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold rounded-md border border-zinc-700"
+            >
+              Mañana
+            </button>
+            <div className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-amber-400" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-0.5 text-xs text-zinc-100 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            {allBlocked ? (
+              <button
+                onClick={handleReopenEntireDay}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/30"
+              >
+                🔓 Reabrir día
+              </button>
+            ) : (
+              <button
+                onClick={handleCloseEntireDay}
+                className="inline-flex items-center gap-1 text-[11px] text-rose-400 font-bold bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1 rounded-md border border-rose-500/30 transition"
+              >
+                <CalendarX2 className="w-3 h-3" />
+                <span>Cerrar día entero</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        {/* BUSCADOR DE CLIENTES */}
+        {/* TIMELINE VISUAL DE HORAS (ESTILO AGENDA) */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-zinc-300">Timeline del día</span>
+            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Libre</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Cita</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600" /> Bloqueo</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-6 gap-1.5 pt-1">
+            {allSlots.map((slot) => {
+              const app = bookedTimeMap.get(slot);
+              const isBlocked = app?.client_name.startsWith("[BLOQUEADO]");
+              const isBooked = !!app && !isBlocked && app.status !== "cancelled";
+
+              return (
+                <div
+                  key={slot}
+                  className={`p-1.5 rounded-lg border text-center text-[11px] flex flex-col justify-between transition ${
+                    isBooked
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold"
+                      : isBlocked
+                      ? "bg-zinc-850 border-zinc-800 text-zinc-500 line-through"
+                      : "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"
+                  }`}
+                >
+                  <span>{slot}</span>
+                  {!isBooked && !isBlocked && (
+                    <button
+                      onClick={() => handleShareStorySlot(slot)}
+                      className="mt-1 text-[9px] text-zinc-400 hover:text-amber-400 flex items-center justify-center gap-0.5"
+                      title="Compartir hueco en Instagram Story"
+                    >
+                      <Share2 className="w-2.5 h-2.5" /> Story
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* BUSCADOR */}
         <div className="relative">
           <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
           <input
             type="text"
-            placeholder="Buscar por cliente, teléfono o corte..."
+            placeholder="Buscar por cliente, teléfono o servicio..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
@@ -371,17 +460,17 @@ export default function AdminPage() {
           <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
             <div className="flex items-center justify-between text-zinc-400 text-xs">
               <span>Caja estimada</span>
-              <span className="text-emerald-400 font-bold text-xs">TOTAL</span>
+              <span className="text-emerald-400 font-bold text-xs">EUR</span>
             </div>
             <p className="text-2xl font-black text-emerald-400 mt-1">{totalRevenue} €</p>
           </div>
         </div>
 
-        {/* LISTADO DE HORAS Y CITAS */}
+        {/* LISTADO DE CITAS */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-              Agenda ({filteredAppointments.length})
+              Citas y Bloqueos ({filteredAppointments.length})
             </h2>
             <span className="text-[11px] text-zinc-500">{selectedDate}</span>
           </div>
@@ -405,7 +494,6 @@ export default function AdminPage() {
             filteredAppointments.map((app) => {
               const isBlocked = app.client_name.startsWith("[BLOQUEADO]");
 
-              // TARJETA DE HORA BLOQUEADA
               if (isBlocked) {
                 return (
                   <div
@@ -430,13 +518,12 @@ export default function AdminPage() {
                       title="Desbloquear hora"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Liberar hora</span>
+                      <span>Liberar</span>
                     </button>
                   </div>
                 );
               }
 
-              // TARJETA DE CITA CON CLIENTE
               return (
                 <div
                   key={app.id}
@@ -473,7 +560,15 @@ export default function AdminPage() {
                         </span>
                       </div>
 
-                      <h3 className="text-sm font-bold text-zinc-100 mt-1">{app.client_name}</h3>
+                      <button
+                        onClick={() => handleViewClientHistory(app)}
+                        className="text-sm font-bold text-zinc-100 mt-1 hover:text-amber-400 flex items-center gap-1 text-left"
+                        title="Ver historial del cliente"
+                      >
+                        <span>{app.client_name}</span>
+                        <History className="w-3 h-3 text-zinc-500" />
+                      </button>
+
                       <p className="text-xs text-zinc-400">
                         {app.service_name} • <strong className="text-zinc-200">{app.price} €</strong>
                       </p>
@@ -505,7 +600,6 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* ACCIONES INFERIORES */}
                   <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
                     {app.client_phone !== "En local" ? (
                       <button
@@ -547,38 +641,89 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* MODAL: BLOQUEAR HORA (CON FECHA PROPIA) */}
+      {/* MODAL: HISTORIAL DEL CLIENTE */}
+      {selectedClientHistory && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                <History className="w-4 h-4 text-amber-400" /> Ficha de {selectedClientHistory.name}
+              </h3>
+              <button onClick={() => setSelectedClientHistory(null)} className="text-zinc-500 hover:text-zinc-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-center">
+              <div>
+                <p className="text-[10px] text-zinc-500 uppercase">Visitas totales</p>
+                <p className="text-lg font-black text-amber-400">{selectedClientHistory.totalVisits}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-zinc-500 uppercase">Gasto acumulado</p>
+                <p className="text-lg font-black text-emerald-400">{selectedClientHistory.totalSpent} €</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <p className="text-xs font-semibold text-zinc-400">Últimos cortes:</p>
+              {selectedClientHistory.history.map((h) => (
+                <div key={h.id} className="text-[11px] p-2 bg-zinc-950/60 rounded-lg border border-zinc-850 flex justify-between">
+                  <span>{h.booking_date} • {h.service_name}</span>
+                  <strong className="text-amber-400">{h.price} €</strong>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setSelectedClientHistory(null)}
+              className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BLOQUEAR HORA */}
       {showBlockModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <form
-            onSubmit={handleBlockSlot}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await supabase.from("appointments").insert([
+                {
+                  client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
+                  client_phone: BARBER_INFO.phone,
+                  service_name: "Hora bloqueada",
+                  price: 0,
+                  booking_date: blockDate,
+                  booking_time: blockTime,
+                  status: "confirmed",
+                },
+              ]);
+              setShowBlockModal(false);
+              fetchDayAppointments();
+            }}
             className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
                 <ShieldBan className="w-4 h-4 text-amber-400" /> Bloquear una hora
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowBlockModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
-              >
+              <button type="button" onClick={() => setShowBlockModal(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-zinc-400">
-              Esa hora no estará disponible para reservar en la web.
-            </p>
-
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-300">Día a bloquear:</label>
+                <label className="text-xs font-semibold text-zinc-300">Día:</label>
                 <input
                   type="date"
                   value={blockDate}
                   onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -587,7 +732,7 @@ export default function AdminPage() {
                 <select
                   value={blockTime}
                   onChange={(e) => setBlockTime(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
                 >
                   {allSlots.map((t) => (
                     <option key={t} value={t}>{t}</option>
@@ -596,31 +741,20 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300">Motivo (visible solo para ti):</label>
+                <label className="text-xs font-semibold text-zinc-300">Motivo (solo para ti):</label>
                 <input
                   type="text"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej: Cita médico, descanso, asuntos propios..."
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                  placeholder="Ej: Médico, descanso..."
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowBlockModal(false)}
-                className="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-semibold"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold"
-              >
-                Bloquear Hora
-              </button>
+              <button type="button" onClick={() => setShowBlockModal(false)} className="w-1/2 py-2.5 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold">Cancelar</button>
+              <button type="submit" className="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold">Bloquear</button>
             </div>
           </form>
         </div>
@@ -630,18 +764,34 @@ export default function AdminPage() {
       {showManualModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <form
-            onSubmit={handleCreateManualBooking}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!manualName.trim()) return;
+
+              await supabase.from("appointments").insert([
+                {
+                  client_name: manualName.trim(),
+                  client_phone: manualPhone.trim() || "En local",
+                  service_name: manualService,
+                  price: manualPrice,
+                  booking_date: manualDate,
+                  booking_time: manualTime,
+                  status: "confirmed",
+                },
+              ]);
+
+              setShowManualModal(false);
+              setManualName("");
+              setManualPhone("");
+              fetchDayAppointments();
+            }}
             className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4 text-emerald-400" /> Añadir Cita Manual
+                <UserPlus className="w-4 h-4 text-emerald-400" /> Cita Manual
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowManualModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
-              >
+              <button type="button" onClick={() => setShowManualModal(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -652,10 +802,10 @@ export default function AdminPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Dani Pérez"
+                  placeholder="Ej: Marcos Pérez"
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -666,7 +816,7 @@ export default function AdminPage() {
                   placeholder="Ej: 612345678"
                   value={manualPhone}
                   onChange={(e) => setManualPhone(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
 
@@ -677,7 +827,7 @@ export default function AdminPage() {
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -685,7 +835,7 @@ export default function AdminPage() {
                   <select
                     value={manualTime}
                     onChange={(e) => setManualTime(e.target.value)}
-                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                    className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
                   >
                     {allSlots.map((t) => (
                       <option key={t} value={t}>{t}</option>
@@ -703,31 +853,18 @@ export default function AdminPage() {
                     setManualService(e.target.value);
                     if (serv) setManualPrice(serv.price);
                   }}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none"
                 >
                   {SERVICES.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name} ({s.price} €)
-                    </option>
+                    <option key={s.id} value={s.name}>{s.name} ({s.price} €)</option>
                   ))}
                 </select>
               </div>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowManualModal(false)}
-                className="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-semibold"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
-              >
-                Guardar Cita
-              </button>
+              <button type="button" onClick={() => setShowManualModal(false)} className="w-1/2 py-2.5 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold">Cancelar</button>
+              <button type="submit" className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Guardar Cita</button>
             </div>
           </form>
         </div>
