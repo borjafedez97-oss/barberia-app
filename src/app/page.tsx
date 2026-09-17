@@ -22,7 +22,8 @@ import {
   AlertCircle,
   ShieldCheck,
   Code2,
-  Ticket
+  Ticket,
+  Shield
 } from "lucide-react";
 
 function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -35,7 +36,6 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
-// SONIDO MECÁNICO SINTÉTICO (Web Audio API)
 const playMechanicalClick = () => {
   if (typeof window === "undefined") return;
   try {
@@ -102,7 +102,6 @@ export default function BookingPage() {
   const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
   const [waitlistName, setWaitlistName] = useState<string>("");
 
-  // Huella de autor secreta
   const [signatureTaps, setSignatureTaps] = useState<number>(0);
   const [showEasterEgg, setShowEasterEgg] = useState<boolean>(false);
 
@@ -289,7 +288,6 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-36 relative overflow-x-hidden">
       
-      {/* MEJORA 2: POLVO DE ORO FLOTANTE + EFECTOS VISUALES */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -374,7 +372,6 @@ export default function BookingPage() {
           background: #18181b;
           border-radius: inherit;
         }
-        /* POLVO DORADO FLOTANTE */
         @keyframes floatDust {
           0% { transform: translateY(0px) translateX(0px); opacity: 0.2; }
           50% { transform: translateY(-35px) translateX(15px); opacity: 0.7; }
@@ -392,13 +389,11 @@ export default function BookingPage() {
         }
       ` }} />
 
-      {/* PARTÍCULAS DE POLVO DORADO FLOTANDO EN EL FONDO */}
       <div className="gold-dust" style={{ top: "25%", left: "15%", animation: "floatDust 6s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "45%", left: "80%", animation: "floatDust 8s 1.5s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "70%", left: "30%", animation: "floatDust 7s 3s infinite ease-in-out" }} />
-      <div className="gold-dust" style={{ top: "85%", left: "75%", animation: "floatDust 9s 2s infinite ease-in-out" }} />
 
-      {/* TIRA BARBER POLE */}
+      {/* BARBER POLE */}
       <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
       {/* CINTA MARQUEE */}
@@ -431,7 +426,7 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* HEADER DE PORTADA */}
+      {/* HEADER */}
       <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl">
         <div className="relative h-56 w-full">
           <Image
@@ -507,7 +502,7 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* MEJORA 4: CÁPSULA ESTILO DYNAMIC ISLAND CON PROGRESO */}
+        {/* DYNAMIC ISLAND DE PROGRESO */}
         {step < 4 && (
           <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/70 flex justify-center">
             <div className="w-full max-w-xs bg-zinc-900/90 border border-zinc-700/60 rounded-full px-4 py-1.5 flex items-center justify-between shadow-inner">
@@ -530,56 +525,111 @@ export default function BookingPage() {
       {/* CONTENIDO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
-        {/* PASO 1: SELECCIONAR SERVICIO CON ACABADO TITANIO */}
+        {/* PASO 1: SERVICIOS + SECCIÓN JARRAMPLAS & C.F. PIORNAL */}
         {step === 1 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
-              </h2>
-              <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
+                  <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
+                </h2>
+                <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
+              </div>
+
+              <div className="grid gap-2.5">
+                {SERVICES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      triggerHaptic(40);
+                      setSelectedService(s);
+                      setStep(2);
+                    }}
+                    className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
+                      s.popular
+                        ? "neon-border-box"
+                        : "bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 border-zinc-800/90 text-zinc-200"
+                    }`}
+                  >
+                    {s.popular && (
+                      <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md z-10">
+                        <Sparkles className="w-2.5 h-2.5" /> Más pedido
+                      </span>
+                    )}
+                    <div className="relative z-10">
+                      <h3 className="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition-colors">
+                        {s.name}
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-0.5">{s.description}</p>
+                      <span className="text-[11px] text-zinc-500 mt-1 inline-block">
+                        ⏱️ {s.duration} min
+                      </span>
+                    </div>
+                    <div className="text-right pl-3 flex items-center gap-2 relative z-10">
+                      <span className="text-base font-black text-amber-400">{s.price} €</span>
+                      <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 transition-colors" />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid gap-2.5">
-              {SERVICES.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    triggerHaptic(40);
-                    setSelectedService(s);
-                    setStep(2);
-                  }}
-                  className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
-                    s.popular
-                      ? "neon-border-box"
-                      : "bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 border-zinc-800/90 text-zinc-200"
-                  }`}
-                >
-                  {s.popular && (
-                    <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md z-10">
-                      <Sparkles className="w-2.5 h-2.5" /> Más pedido
-                    </span>
-                  )}
-                  <div className="relative z-10">
-                    <h3 className="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition-colors">
-                      {s.name}
-                    </h3>
-                    <p className="text-xs text-zinc-400 mt-0.5">{s.description}</p>
-                    <span className="text-[11px] text-zinc-500 mt-1 inline-block">
-                      ⏱️ {s.duration} min
+            {/* SECCIÓN ESPECIAL: ORGULLO PIORNALEGO (C.F. PIORNAL #10 Y MÁSCARA JARRAMPLAS) */}
+            <div className="pt-2">
+              <div className="p-4 rounded-3xl bg-gradient-to-b from-zinc-900/90 to-zinc-950 border border-zinc-800/80 shadow-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-zinc-200">
+                      ADN & Raíces • Piornal
                     </span>
                   </div>
-                  <div className="text-right pl-3 flex items-center gap-2 relative z-10">
-                    <span className="text-base font-black text-amber-400">{s.price} €</span>
-                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 transition-colors" />
+                  <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    Tradición
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  {/* TARJETA 1: C.F. PIORNAL DORSAL 10 */}
+                  <div className="relative bg-zinc-950/80 border border-zinc-800/90 rounded-2xl p-3 flex flex-col items-center text-center overflow-hidden group hover:border-amber-500/40 transition">
+                    <div className="relative w-16 h-16 mb-2">
+                      <Image
+                        src="/cf-piornal.png"
+                        alt="C.F. Piornal"
+                        fill
+                        className="object-contain filter drop-shadow-[0_2px_10px_rgba(239,68,68,0.3)] group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest bg-amber-500/15 px-2 py-0.5 rounded-full mb-1 border border-amber-500/30">
+                      Dorsal #10
+                    </span>
+                    <h4 className="text-xs font-bold text-zinc-100">C.F. Piornal</h4>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">El diez del pueblo en el campo</p>
                   </div>
-                </button>
-              ))}
+
+                  {/* TARJETA 2: MÁSCARA DE JARRAMPLAS */}
+                  <div className="relative bg-zinc-950/80 border border-zinc-800/90 rounded-2xl p-3 flex flex-col items-center text-center overflow-hidden group hover:border-amber-500/40 transition">
+                    <div className="relative w-16 h-16 mb-2 rounded-xl overflow-hidden border border-zinc-800 shadow-inner">
+                      <Image
+                        src="/jarramplas.jpg"
+                        alt="Máscara Jarramplas creada por el barbero"
+                        fill
+                        className="object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                    </div>
+                    <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest bg-rose-500/15 px-2 py-0.5 rounded-full mb-1 border border-rose-500/30">
+                      Hecha a mano
+                    </span>
+                    <h4 className="text-xs font-bold text-zinc-100">Jarramplas</h4>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Máscara creada por el barbero</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* PASO 2: HORARIOS CON ILUMINACIÓN AMBIENTAL REACTIVA */}
+        {/* PASO 2: HORARIOS CON ILUMINACIÓN AMBIENTAL */}
         {step === 2 && selectedService && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
@@ -640,7 +690,6 @@ export default function BookingPage() {
               </div>
             ) : (
               <>
-                {/* MAÑANAS CON RESPLANDOR SOLAR */}
                 <div className="p-3 rounded-2xl bg-amber-500/[0.03] border border-amber-500/20 space-y-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
                     <Sun className="w-3.5 h-3.5 text-amber-400" /> Turnos de Mañana
@@ -681,7 +730,6 @@ export default function BookingPage() {
                   </div>
                 </div>
 
-                {/* TARDES CON RESPLANDOR ÍNDIGO */}
                 <div className="p-3 rounded-2xl bg-indigo-500/[0.03] border border-indigo-500/20 space-y-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-400/90 flex items-center gap-1.5">
                     <Moon className="w-3.5 h-3.5 text-indigo-400" /> Turnos de Tarde
@@ -726,7 +774,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 3: FORMULARIO + MEJORA 1: TICKET VIP CON PERFORACIONES */}
+        {/* PASO 3: TICKET VIP Y DATOS */}
         {step === 3 && selectedService && (
           <div className="space-y-4">
             <button
@@ -739,9 +787,8 @@ export default function BookingPage() {
               <ArrowLeft className="w-3.5 h-3.5" /> Modificar fecha u hora
             </button>
 
-            {/* TICKET VIP DIGITAL PERFORADO */}
+            {/* TICKET VIP PERFORADO */}
             <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden">
-              {/* Muescas circulares laterales troqueladas */}
               <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
               <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
 
@@ -768,7 +815,6 @@ export default function BookingPage() {
                 </div>
               </div>
 
-              {/* Código de barras decorativo */}
               <div className="pt-3 border-t border-dashed border-zinc-700/80 flex items-center justify-between">
                 <span className="text-[10px] text-zinc-500 font-mono tracking-widest">||| | ||| || ||| | || |||</span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -825,7 +871,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 4: CONFIRMACIÓN CON TICKET FINAL Y PARTICULAS */}
+        {/* PASO 4: CONFIRMACIÓN */}
         {step === 4 && selectedService && (
           <div className="text-center py-6 space-y-5">
             <div className="w-16 h-16 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-pulse">
@@ -841,7 +887,7 @@ export default function BookingPage() {
               </p>
             </div>
 
-            {/* TICKET PERFORADO PARA CAPTURAR PANTALLA */}
+            {/* TICKET PERFORADO FINAL */}
             <div className="relative max-w-xs mx-auto bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden text-left">
               <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
               <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
@@ -886,7 +932,7 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* PIE DE PÁGINA: FIRMA DE AUTOR CON EASTER EGG */}
+      {/* PIE DE PÁGINA: FIRMA DE AUTOR */}
       <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
         <button
           onClick={handleSignatureClick}
@@ -905,7 +951,7 @@ export default function BookingPage() {
         </div>
       )}
 
-      {/* BARRA FLOTANTE FIJA INFERIOR (STICKY BAR) CON GOLD SHIMMER */}
+      {/* STICKY BAR */}
       {step === 2 && (
         <div className="fixed bottom-0 left-0 right-0 p-3 bg-zinc-950/85 backdrop-blur-md border-t border-zinc-800/80 z-40 flex justify-center">
           <div className="w-full max-w-lg">
@@ -947,7 +993,7 @@ export default function BookingPage() {
         </div>
       )}
 
-      {/* MODAL: LISTA DE ESPERA */}
+      {/* MODAL LISTA DE ESPERA */}
       {showWaitlistModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <form
