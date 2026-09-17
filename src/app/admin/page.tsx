@@ -21,7 +21,8 @@ import {
   Share2,
   History,
   CalendarX2,
-  AlertTriangle
+  AlertTriangle,
+  Timer
 } from "lucide-react";
 
 interface Appointment {
@@ -49,6 +50,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
+  // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
   const [blockDate, setBlockDate] = useState<string>("");
   const [blockTime, setBlockTime] = useState<string>("10:00");
@@ -62,6 +64,7 @@ export default function AdminPage() {
   const [manualService, setManualService] = useState<string>(SERVICES[0].name);
   const [manualPrice, setManualPrice] = useState<number>(SERVICES[0].price);
 
+  // Modal Historial
   const [selectedClientHistory, setSelectedClientHistory] = useState<{
     name: string;
     phone: string;
@@ -69,6 +72,10 @@ export default function AdminPage() {
     totalSpent: number;
     history: Appointment[];
   } | null>(null);
+
+  // Modal Cancelación con WhatsApp
+  const [cancelModalApp, setCancelModalApp] = useState<Appointment | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>("un imprevisto de fuerza mayor");
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
@@ -142,8 +149,48 @@ export default function AdminPage() {
     }
   };
 
+  // 1. CANCELACIÓN CON AVISO POR WHATSAPP AL CLIENTE
+  const handleConfirmCancellation = async (sendWhatsApp: boolean) => {
+    if (!cancelModalApp) return;
+
+    await updateStatus(cancelModalApp.id, "cancelled");
+
+    if (sendWhatsApp && cancelModalApp.client_phone !== "En local") {
+      const cleanPhone = cancelModalApp.client_phone.replace(/\D/g, "");
+      const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
+      const webUrl = typeof window !== "undefined" ? window.location.origin : "nuestra web";
+
+      const text =
+        `💈 *AVISO DE CANCELACIÓN - JBARBERS* 💈\n\n` +
+        `¡Buenas, *${cancelModalApp.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita de hoy/el día *${cancelModalApp.booking_date}* a las *${cancelModalApp.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
+        `🙏 Te pido mil disculpas por el contratiempo. Puedes volver a pedir cita en cualquier otro hueco libre entrando aquí:\n` +
+        `👉 ${webUrl}\n\n` +
+        `O si lo prefieres, dime qué otra hora te vendría bien y te busco un hueco. ¡Muchas gracias por la comprensión!`;
+
+      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+    }
+
+    setCancelModalApp(null);
+  };
+
+  // 2. AVISAR RETRASO DE 10-15 MINUTOS
+  const handleSendDelayNotice = (app: Appointment) => {
+    if (app.client_phone === "En local") return;
+
+    const cleanPhone = app.client_phone.replace(/\D/g, "");
+    const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
+
+    const text =
+      `💈 *AVISO DE HORARIO - JBARBERS* 💈\n\n` +
+      `¡Buenas, *${app.client_name}*! Te aviso con un poco de antelación de que voy con unos *10-15 minutos de retraso* con los cortes de antes.\n\n` +
+      `Para que no tengas que estar esperando aquí de pie, puedes venirte con calma sobre las *${app.booking_time}* y cuarto. ¡Disculpa las molestias y nos vemos ahora!`;
+
+    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  // CERRAR Y REABRIR DÍAS ENTEROS
   const handleCloseEntireDay = async () => {
-    const reason = window.prompt("Motivo del cierre de día:", "Festivo / Vacaciones / Jarramplas");
+    const reason = window.prompt("Motivo del cierre:", "Festivo / Vacaciones / Jarramplas");
     if (!reason) return;
 
     setLoading(true);
@@ -182,7 +229,7 @@ export default function AdminPage() {
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text);
-      alert(`¡Texto copiado al portapapeles!\n\nPégalo en tu Story de Instagram:\n\n"${text}"`);
+      alert(`¡Texto copiado!\n\nPégalo en tu Story de Instagram:\n\n"${text}"`);
     }
   };
 
@@ -231,7 +278,6 @@ export default function AdminPage() {
     setSelectedDate(d.toISOString().split("T")[0]);
   };
 
-  // DETECTAR SOLAPAMIENTOS DE HORA
   const activeAppsForDuplicateCheck = appointments.filter((a) => a.status !== "cancelled");
   const timeOccurrences = activeAppsForDuplicateCheck.reduce((acc, curr) => {
     acc[curr.booking_time] = (acc[curr.booking_time] || 0) + 1;
@@ -303,7 +349,27 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center">
+      {/* BARBER POLE TRADICIONAL ANIMADO */}
       <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes barberPoleMove {
+          0% { background-position: 0 0; }
+          100% { background-position: 40px 0; }
+        }
+        .barber-pole-stripe {
+          background: repeating-linear-gradient(
+            -45deg,
+            #ef4444,
+            #ef4444 10px,
+            #ffffff 10px,
+            #ffffff 20px,
+            #3b82f6 20px,
+            #3b82f6 30px,
+            #ffffff 30px,
+            #ffffff 40px
+          );
+          background-size: 56px 100%;
+          animation: barberPoleMove 1.5s linear infinite;
+        }
         @keyframes adminTicker {
           0% { transform: translate3d(0, 0, 0); }
           100% { transform: translate3d(-50%, 0, 0); }
@@ -315,7 +381,10 @@ export default function AdminPage() {
         }
       ` }} />
 
-      {/* CINTA SUPERIOR DINÁMICA DEL ADMIN */}
+      {/* TIRA DE BARBER POLE CLÁSICA */}
+      <div className="w-full max-w-2xl h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
+
+      {/* CINTA MARQUEE */}
       <div className="w-full max-w-2xl overflow-hidden bg-zinc-900 border-b border-zinc-800 py-1 select-none text-[10px] text-zinc-400 font-semibold tracking-wider uppercase">
         <div className="admin-marquee">
           <div className="flex items-center gap-6 whitespace-nowrap">
@@ -323,7 +392,7 @@ export default function AdminPage() {
             <span>•</span>
             <span>📅 DÍA: {selectedDate}</span>
             <span>•</span>
-            <span>👥 {activeAppointments.length} CLIENTES CITADOS</span>
+            <span>👥 {activeAppointments.length} CITAS ACTIVAS</span>
             <span>•</span>
             <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
             <span>•</span>
@@ -335,7 +404,7 @@ export default function AdminPage() {
             <span>•</span>
             <span>📅 DÍA: {selectedDate}</span>
             <span>•</span>
-            <span>👥 {activeAppointments.length} CLIENTES CITADOS</span>
+            <span>👥 {activeAppointments.length} CITAS ACTIVAS</span>
             <span>•</span>
             <span className="text-emerald-400 font-bold">💰 {totalRevenue} € EN CAJA</span>
             <span>•</span>
@@ -345,12 +414,12 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* CABECERA SUPERIOR */}
+      {/* CABECERA */}
       <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-amber-400 tracking-wider">JBARBERS • AGENDA</h1>
-            <p className="text-[11px] text-zinc-400">Control de clientes y caja</p>
+            <p className="text-[11px] text-zinc-400">Control de clientes y avisos</p>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -433,7 +502,7 @@ export default function AdminPage() {
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        {/* TIMELINE VISUAL DE LA JORNADA */}
+        {/* TIMELINE VISUAL */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2 shadow-lg">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-zinc-200">Distribución de horas</span>
@@ -466,7 +535,7 @@ export default function AdminPage() {
                     <button
                       onClick={() => handleShareStorySlot(slot)}
                       className="mt-1 text-[9px] text-zinc-400 hover:text-amber-400 flex items-center justify-center gap-0.5"
-                      title="Copiar texto para Story de Instagram"
+                      title="Copiar para Instagram Story"
                     >
                       <Share2 className="w-2.5 h-2.5" /> Story
                     </button>
@@ -489,7 +558,7 @@ export default function AdminPage() {
           />
         </div>
 
-        {/* MÉTRICAS DE CAJA */}
+        {/* CAJA Y CLIENTES */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
             <div className="flex items-center justify-between text-zinc-400 text-xs">
@@ -521,7 +590,7 @@ export default function AdminPage() {
             <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda...</div>
           ) : filteredAppointments.length === 0 ? (
             <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-2">
-              <p>No hay citas ni bloqueos registrados para este día.</p>
+              <p>No hay citas ni bloqueos para este día.</p>
               <button
                 onClick={() => {
                   setManualDate(selectedDate);
@@ -652,21 +721,35 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  {/* ACCIONES Y BOTONES DE WHATSAPP / RETRASO */}
                   <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
-                    {app.client_phone !== "En local" ? (
-                      <button
-                        onClick={() => sendWhatsAppReminder(app)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                        <span>Recordar por WhatsApp</span>
-                      </button>
+                    {app.client_phone !== "En local" && app.status !== "cancelled" ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => sendWhatsAppReminder(app)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                          <span>Recordar</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleSendDelayNotice(app)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium transition"
+                          title="Avisar que vas con 10 min de retraso"
+                        >
+                          <Timer className="w-3.5 h-3.5 text-amber-400" />
+                          <span>+10 min</span>
+                        </button>
+                      </div>
                     ) : (
-                      <span className="text-[11px] text-zinc-500 italic">Cita tomada en persona</span>
+                      <span className="text-[11px] text-zinc-500 italic">
+                        {app.status === "cancelled" ? "Cita cancelada" : "Cita en persona"}
+                      </span>
                     )}
 
                     <div className="flex items-center gap-1.5">
-                      {app.status !== "completed" && (
+                      {app.status !== "completed" && app.status !== "cancelled" && (
                         <button
                           onClick={() => updateStatus(app.id, "completed")}
                           className="px-2.5 py-1.5 bg-zinc-800 hover:bg-emerald-950 text-zinc-300 hover:text-emerald-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
@@ -677,7 +760,7 @@ export default function AdminPage() {
                       )}
                       {app.status !== "cancelled" && (
                         <button
-                          onClick={() => updateStatus(app.id, "cancelled")}
+                          onClick={() => setCancelModalApp(app)}
                           className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -692,6 +775,54 @@ export default function AdminPage() {
           )}
         </div>
       </main>
+
+      {/* MODAL: ANULAR CITA Y AVISAR POR WHATSAPP */}
+      {cancelModalApp && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-rose-400 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4" /> Cancelar Cita
+              </h3>
+              <button onClick={() => setCancelModalApp(null)} className="text-zinc-500 hover:text-zinc-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-300">
+              Vas a anular la cita de <strong className="text-white">{cancelModalApp.client_name}</strong> para las <strong>{cancelModalApp.booking_time} h</strong>.
+            </p>
+
+            <div>
+              <label className="text-xs font-semibold text-zinc-400">Motivo para el mensaje de disculpa:</label>
+              <input
+                type="text"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Ej: un imprevisto médico, corte de luz..."
+                className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => handleConfirmCancellation(true)}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-600/20"
+              >
+                <MessageCircle className="w-4 h-4 fill-current" />
+                <span>Anular y avisar por WhatsApp</span>
+              </button>
+
+              <button
+                onClick={() => handleConfirmCancellation(false)}
+                className="w-full py-2 bg-zinc-800 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-semibold transition"
+              >
+                Anular sin enviar WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: HISTORIAL DEL CLIENTE */}
       {selectedClientHistory && (
@@ -798,7 +929,7 @@ export default function AdminPage() {
                   type="text"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej: Médico, recado, descanso..."
+                  placeholder="Ej: Médico, descanso..."
                   className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
                 />
               </div>
