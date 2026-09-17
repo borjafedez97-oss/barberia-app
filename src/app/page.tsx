@@ -516,7 +516,7 @@ export default function BookingPage() {
               onClick={() => triggerHaptic(20)}
             >
               <Image
-                src="/jarramplas.jpg"
+                src="/Jarramplas.jpg"
                 alt="Jarramplas"
                 fill
                 className="object-cover"
