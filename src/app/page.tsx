@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { BARBER_INFO, SERVICES, Service } from "@/data/services";
 import { supabase } from "@/lib/supabase";
@@ -36,6 +36,7 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
+// 1. SONIDO MECÁNICO TÁCTIL (Web Audio API)
 const playMechanicalClick = () => {
   if (typeof window === "undefined") return;
   try {
@@ -57,6 +58,28 @@ const playMechanicalClick = () => {
 
     osc.start();
     osc.stop(ctx.currentTime + 0.04);
+  } catch {}
+};
+
+// 2. SONIDO ARMÓNICO CELESTIAL PARA EL AURA DEL LOGO
+const playAuraSound = () => {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    [261.63, 329.63, 392.00, 523.25].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2 + idx * 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 1.4);
+    });
   } catch {}
 };
 
@@ -90,10 +113,12 @@ export default function BookingPage() {
   const [currentTimeStr, setCurrentTimeStr] = useState<string>("");
   
   const [step, setStep] = useState<number>(1);
+  const [slideDirection, setSlideDirection] = useState<"forward" | "backward">("forward");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [nextAvailableToday, setNextAvailableToday] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string>("");
   const [clientPhone, setClientPhone] = useState<string>("");
@@ -102,7 +127,16 @@ export default function BookingPage() {
   const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
   const [waitlistName, setWaitlistName] = useState<string>("");
 
-  // Despliegue de firma a 1 solo toque
+  // Micro-interacciones
+  const [snipActive, setSnipActive] = useState<boolean>(false);
+  const [calendarShake, setCalendarShake] = useState<boolean>(false);
+  const [phoneRing, setPhoneRing] = useState<boolean>(false);
+
+  // Aura reactiva del logo
+  const [logoAuraActive, setLogoAuraActive] = useState<boolean>(false);
+  const auraTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Despliegue de firma
   const [showCreatorBadge, setShowCreatorBadge] = useState<boolean>(false);
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
@@ -140,8 +174,10 @@ export default function BookingPage() {
     };
   }, []);
 
+  // CONSULTA CON ESQUELETO DE CARGA DORADO
   const fetchOccupiedSlots = async () => {
     if (!selectedDate) return;
+    setLoadingSlots(true);
 
     const { data, error } = await supabase
       .from("appointments")
@@ -159,13 +195,38 @@ export default function BookingPage() {
     });
 
     setNextAvailableToday(validSlotsToday.length > 0 ? validSlotsToday[0] : null);
+    
+    // Suave retardo para exhibir el esqueleto dorado
+    setTimeout(() => {
+      setLoadingSlots(false);
+    }, 280);
   };
 
   useEffect(() => {
     fetchOccupiedSlots();
   }, [selectedDate]);
 
-  // Al pulsar una vez sobre tu nombre, se despliega la tarjeta
+  // Manejador del Aura del Logo (Mantener pulsado)
+  const handleLogoTouchStart = () => {
+    auraTimerRef.current = setTimeout(() => {
+      setLogoAuraActive(true);
+      playAuraSound();
+      triggerHaptic(75);
+      setTimeout(() => setLogoAuraActive(false), 2200);
+    }, 450);
+  };
+
+  const handleLogoTouchEnd = () => {
+    if (auraTimerRef.current) {
+      clearTimeout(auraTimerRef.current);
+    }
+  };
+
+  const goToStep = (newStep: number) => {
+    setSlideDirection(newStep > step ? "forward" : "backward");
+    setStep(newStep);
+  };
+
   const handleSignatureClick = () => {
     triggerHaptic(35);
     setShowCreatorBadge((prev) => !prev);
@@ -195,7 +256,7 @@ export default function BookingPage() {
         alert(`⚠️ ¡Vaya! Justo acaban de reservar las ${selectedTime} h hace un instante. Por favor, selecciona otro hueco.`);
         setBookedSlots((prev) => [...prev, selectedTime]);
         setSelectedTime("");
-        setStep(2);
+        goToStep(2);
         setIsSubmitting(false);
         return;
       }
@@ -227,7 +288,7 @@ export default function BookingPage() {
         `¿Me confirmas disponibilidad? ¡Gracias!`;
 
       window.open(`https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(message)}`, "_blank");
-      setStep(4);
+      goToStep(4);
     } catch (err) {
       console.error(err);
       alert("Hubo un problema de conexión al registrar tu cita. Inténtalo de nuevo.");
@@ -281,6 +342,7 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-36 relative overflow-x-hidden">
       
+      {/* ESTILOS DE ANIMACIONES: SLIDE TRANSITIONS + CHROME METALLIC + SNIP + SKELETON */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -380,13 +442,88 @@ export default function BookingPage() {
           pointer-events: none;
           z-index: 1;
         }
+
+        /* 1. SLIDE TRANSITIONS ESTILO IPHONE */
+        @keyframes slideInFromRight {
+          0% { opacity: 0; transform: translate3d(28px, 0, 0); }
+          100% { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+        @keyframes slideInFromLeft {
+          0% { opacity: 0; transform: translate3d(-28px, 0, 0); }
+          100% { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+        .slide-forward {
+          animation: slideInFromRight 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .slide-backward {
+          animation: slideInFromLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* 2. EFECTO ESPEJO CROMADO */
+        @keyframes chromeShine {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .chrome-gold-text {
+          background: linear-gradient(135deg, #ffffff 0%, #fef08a 25%, #f59e0b 50%, #fef08a 75%, #ffffff 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: chromeShine 6s ease-in-out infinite;
+        }
+
+        /* 3. MICRO-INTERACCIONES EN ICONOS */
+        @keyframes snipCut {
+          0% { transform: rotate(0deg); }
+          25% { transform: rotate(-18deg) scale(1.15); }
+          50% { transform: rotate(14deg) scale(1.15); }
+          75% { transform: rotate(-8deg); }
+          100% { transform: rotate(0deg); }
+        }
+        .animate-snip {
+          animation: snipCut 0.45s ease-in-out;
+        }
+        @keyframes shakeCal {
+          0%, 100% { transform: rotate(0deg); }
+          20% { transform: rotate(-12deg) scale(1.1); }
+          40% { transform: rotate(12deg) scale(1.1); }
+          60% { transform: rotate(-6deg); }
+          80% { transform: rotate(6deg); }
+        }
+        .animate-shake {
+          animation: shakeCal 0.5s ease-in-out;
+        }
+        @keyframes ringTel {
+          0%, 100% { transform: rotate(0deg); }
+          15% { transform: rotate(-15deg) scale(1.15); }
+          30% { transform: rotate(15deg) scale(1.15); }
+          45% { transform: rotate(-10deg); }
+          60% { transform: rotate(10deg); }
+          75% { transform: rotate(-5deg); }
+        }
+        .animate-ring {
+          animation: ringTel 0.5s ease-in-out;
+        }
+
+        /* 4. ESQUELETO DORADO */
+        @keyframes goldSkeletonSweep {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .golden-skeleton {
+          background: linear-gradient(90deg, #18181b 25%, #27272a 37%, rgba(245,158,11,0.25) 50%, #27272a 63%, #18181b 75%);
+          background-size: 200% 100%;
+          animation: goldSkeletonSweep 1.3s infinite ease-in-out;
+        }
       ` }} />
 
+      {/* POLVO DORADO FLOTANTE */}
       <div className="gold-dust" style={{ top: "25%", left: "15%", animation: "floatDust 6s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "45%", left: "80%", animation: "floatDust 8s 1.5s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "70%", left: "30%", animation: "floatDust 7s 3s infinite ease-in-out" }} />
 
-      {/* BARBER POLE */}
+      {/* TIRA BARBER POLE */}
       <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
       {/* CINTA MARQUEE */}
@@ -419,8 +556,13 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* HEADER DE PORTADA */}
-      <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl">
+      {/* HEADER CON AURA REACTIVA AL MANTENER PULSADO EL LOGO */}
+      <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl transition-all duration-700">
+        {/* AURA EXPANSIVA DEL LOGO (MEJORA 5) */}
+        {logoAuraActive && (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(245,158,11,0.55)_0%,rgba(245,158,11,0.15)_50%,transparent_80%)] z-10 pointer-events-none animate-pulse" />
+        )}
+
         <div className="relative h-56 w-full">
           <Image
             src="/hero.jpg"
@@ -452,25 +594,35 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* LOGO */}
-        <div className="relative -mt-16 px-5 pb-4 text-center flex flex-col items-center">
-          <div className="relative w-32 h-16 mb-2 hover:scale-105 transition-transform duration-300">
+        {/* LOGO CON DETECCIÓN DE PULSACIÓN PROLONGADA */}
+        <div className="relative -mt-16 px-5 pb-4 text-center flex flex-col items-center z-20">
+          <div 
+            onTouchStart={handleLogoTouchStart}
+            onTouchEnd={handleLogoTouchEnd}
+            onMouseDown={handleLogoTouchStart}
+            onMouseUp={handleLogoTouchEnd}
+            className="relative w-32 h-16 mb-2 hover:scale-105 active:scale-95 transition-transform duration-300 cursor-pointer select-none"
+            title="Mantén pulsado para activar el halo de luz"
+          >
             <Image
               src="/logo.png"
               alt="Logo JBarbers"
               fill
-              className="object-contain filter drop-shadow-[0_4px_15px_rgba(0,0,0,0.9)]"
+              className={`object-contain filter drop-shadow-[0_4px_15px_rgba(0,0,0,0.9)] transition-all duration-500 ${
+                logoAuraActive ? "brightness-125 scale-110 drop-shadow-[0_0_25px_rgba(245,158,11,0.8)]" : ""
+              }`}
             />
           </div>
 
-          <h1 className="text-2xl font-black tracking-wider uppercase text-amber-400 drop-shadow-md">
+          {/* TÍTULO CON EFECTO ESPEJO CROMADO (MEJORA 2) */}
+          <h1 className="text-2xl font-black tracking-wider uppercase chrome-gold-text drop-shadow-md">
             {BARBER_INFO.name}
           </h1>
           <p className="text-xs text-zinc-400 max-w-xs mt-0.5">
             Cortes degradados, estilo urbano y perfilado clásico
           </p>
 
-          {/* FILA DE ENLACES + LOS 2 LOGOS SUELTOS ESTILO PINES METÁLICOS */}
+          {/* BOTONES Y PINES LOCALES */}
           <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
             <a
               href={BARBER_INFO.mapsUrl}
@@ -494,9 +646,9 @@ export default function BookingPage() {
               <span>@{BARBER_INFO.instagram}</span>
             </a>
 
-            {/* LOGO 1: C.F. PIORNAL SUELTO */}
+            {/* PINES METÁLICOS DISCRETOS */}
             <div 
-              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 p-0.5 shadow-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 p-0.5 shadow-md flex items-center justify-center hover:scale-110 active:scale-90 transition-transform cursor-pointer"
               title="C.F. Piornal"
               onClick={() => triggerHaptic(20)}
             >
@@ -509,17 +661,18 @@ export default function BookingPage() {
               />
             </div>
 
-            {/* LOGO 2: JARRAMPLAS SUELTO */}
             <div 
-              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 overflow-hidden shadow-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 overflow-hidden shadow-md flex items-center justify-center hover:scale-110 active:scale-90 transition-transform cursor-pointer"
               title="Jarramplas Piornal"
               onClick={() => triggerHaptic(20)}
             >
               <Image
                 src="/Jarramplas.jpg"
                 alt="Jarramplas"
-                fill
-                className="object-cover"
+                width={28}
+                height={28}
+                unoptimized
+                className="w-full h-full object-cover"
               />
             </div>
           </div>
@@ -545,15 +698,16 @@ export default function BookingPage() {
         )}
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* CONTENIDO PRINCIPAL CON TRANSICIÓN CINEMÁTICA SLIDE (MEJORA 1) */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
         {/* PASO 1: SELECCIONAR SERVICIO */}
         {step === 1 && (
-          <div className="space-y-4">
+          <div className={`space-y-4 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
+                <Scissors className={`w-4 h-4 text-amber-400 ${snipActive ? "animate-snip" : ""}`} /> 
+                <span>Catálogo de servicios</span>
               </h2>
               <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
             </div>
@@ -563,9 +717,11 @@ export default function BookingPage() {
                 <button
                   key={s.id}
                   onClick={() => {
+                    setSnipActive(true);
+                    setTimeout(() => setSnipActive(false), 450);
                     triggerHaptic(40);
                     setSelectedService(s);
-                    setStep(2);
+                    goToStep(2);
                   }}
                   className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
                     s.popular
@@ -597,14 +753,14 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 2: HORARIOS */}
+        {/* PASO 2: HORARIOS CON ESQUELETO DORADO (MEJORA 4) */}
         {step === 2 && selectedService && (
-          <div className="space-y-5">
+          <div className={`space-y-5 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <div className="flex items-center justify-between">
               <button
                 onClick={() => {
                   triggerHaptic(30);
-                  setStep(1);
+                  goToStep(1);
                 }}
                 className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-amber-400 active:scale-95 transition-all"
               >
@@ -618,10 +774,11 @@ export default function BookingPage() {
             <div className="bg-zinc-900/90 p-4 rounded-2xl border border-zinc-800 shadow-lg space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <CalendarIcon className="w-4 h-4 text-amber-400" /> Selecciona el día:
+                  <CalendarIcon className={`w-4 h-4 text-amber-400 ${calendarShake ? "animate-shake" : ""}`} /> 
+                  <span>Selecciona el día:</span>
                 </label>
                 <span className="text-[11px] text-zinc-400 font-medium">
-                  {availableSlotsTodayCount === 0 ? "⚠️ Día completo" : `${availableSlotsTodayCount} libres`}
+                  {loadingSlots ? "Consultando..." : availableSlotsTodayCount === 0 ? "⚠️ Día completo" : `${availableSlotsTodayCount} libres`}
                 </span>
               </div>
               <input
@@ -629,6 +786,8 @@ export default function BookingPage() {
                 value={selectedDate}
                 min={new Date().toISOString().split("T")[0]}
                 onChange={(e) => {
+                  setCalendarShake(true);
+                  setTimeout(() => setCalendarShake(false), 500);
                   triggerHaptic(30);
                   setSelectedDate(e.target.value);
                   setSelectedTime("");
@@ -637,7 +796,19 @@ export default function BookingPage() {
               />
             </div>
 
-            {availableSlotsTodayCount === 0 ? (
+            {loadingSlots ? (
+              /* ESQUELETO DORADO DE CARGA */
+              <div className="space-y-4">
+                <div className="p-3 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-2">
+                  <div className="w-28 h-3.5 rounded golden-skeleton" />
+                  <div className="grid grid-cols-4 gap-2 pt-1">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <div key={i} className="h-8 rounded-xl golden-skeleton" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : availableSlotsTodayCount === 0 ? (
               <div className="bg-zinc-900/60 border border-dashed border-zinc-800 rounded-2xl p-6 text-center space-y-3">
                 <AlertCircle className="w-8 h-8 text-amber-400 mx-auto" />
                 <div>
@@ -744,11 +915,11 @@ export default function BookingPage() {
 
         {/* PASO 3: TICKET VIP Y FORMULARIO */}
         {step === 3 && selectedService && (
-          <div className="space-y-4">
+          <div className={`space-y-4 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <button
               onClick={() => {
                 triggerHaptic(30);
-                setStep(2);
+                goToStep(2);
               }}
               className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-amber-400 active:scale-95 transition-all"
             >
@@ -807,12 +978,17 @@ export default function BookingPage() {
 
               <div>
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1 mb-1">
-                  <Phone className="w-3.5 h-3.5 text-amber-400" /> Teléfono de contacto *
+                  <Phone className={`w-3.5 h-3.5 text-amber-400 ${phoneRing ? "animate-ring" : ""}`} /> 
+                  <span>Teléfono de contacto *</span>
                 </label>
                 <input
                   type="tel"
                   placeholder="Ej: 612345678"
                   value={clientPhone}
+                  onFocus={() => {
+                    setPhoneRing(true);
+                    setTimeout(() => setPhoneRing(false), 500);
+                  }}
                   onChange={(e) => setClientPhone(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-sm text-zinc-100 focus:outline-none focus:border-amber-500 transition"
                 />
@@ -841,7 +1017,7 @@ export default function BookingPage() {
 
         {/* PASO 4: CONFIRMACIÓN */}
         {step === 4 && selectedService && (
-          <div className="text-center py-6 space-y-5">
+          <div className="text-center py-6 space-y-5 slide-forward">
             <div className="w-16 h-16 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-pulse">
               <CheckCircle2 className="w-10 h-10" />
             </div>
@@ -888,7 +1064,7 @@ export default function BookingPage() {
                   setClientName("");
                   setClientPhone("");
                   setNotes("");
-                  setStep(1);
+                  goToStep(1);
                 }}
                 className="px-6 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 active:scale-95 border border-zinc-700 text-xs font-semibold text-zinc-200 transition-all shadow-md"
               >
@@ -899,7 +1075,7 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* PIE DE PÁGINA: TU HUELLA DE AUTOR (DESPLIEGUE A 1 SOLO TOQUE) */}
+      {/* PIE DE PÁGINA: AUTOR */}
       <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
         <button
           onClick={handleSignatureClick}
@@ -910,7 +1086,7 @@ export default function BookingPage() {
         </button>
       </footer>
 
-      {/* TARJETA DE AUTOR DESPLEGABLE A 1 SOLO TOQUE */}
+      {/* TARJETA DE AUTOR */}
       {showCreatorBadge && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="w-full max-w-xs bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)] relative">
@@ -951,7 +1127,7 @@ export default function BookingPage() {
               disabled={!selectedTime}
               onClick={() => {
                 triggerHaptic(50);
-                setStep(3);
+                goToStep(3);
               }}
               className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl ${
                 selectedTime
