@@ -23,7 +23,7 @@ import {
   ShieldCheck,
   Code2,
   Ticket,
-  Shield
+  X
 } from "lucide-react";
 
 function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -102,8 +102,8 @@ export default function BookingPage() {
   const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
   const [waitlistName, setWaitlistName] = useState<string>("");
 
-  const [signatureTaps, setSignatureTaps] = useState<number>(0);
-  const [showEasterEgg, setShowEasterEgg] = useState<boolean>(false);
+  // Despliegue de firma a 1 solo toque
+  const [showCreatorBadge, setShowCreatorBadge] = useState<boolean>(false);
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
@@ -165,17 +165,10 @@ export default function BookingPage() {
     fetchOccupiedSlots();
   }, [selectedDate]);
 
+  // Al pulsar una vez sobre tu nombre, se despliega la tarjeta
   const handleSignatureClick = () => {
-    const nextCount = signatureTaps + 1;
-    setSignatureTaps(nextCount);
-    triggerHaptic(20);
-
-    if (nextCount >= 5) {
-      triggerHaptic(80);
-      setShowEasterEgg(true);
-      setSignatureTaps(0);
-      setTimeout(() => setShowEasterEgg(false), 4500);
-    }
+    triggerHaptic(35);
+    setShowCreatorBadge((prev) => !prev);
   };
 
   const handleConfirmBooking = async () => {
@@ -426,7 +419,7 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* HEADER */}
+      {/* HEADER DE PORTADA */}
       <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl">
         <div className="relative h-56 w-full">
           <Image
@@ -477,16 +470,17 @@ export default function BookingPage() {
             Cortes degradados, estilo urbano y perfilado clásico
           </p>
 
-          <div className="flex items-center gap-2 mt-3">
+          {/* FILA DE ENLACES + LOS 2 LOGOS SUELTOS ESTILO PINES METÁLICOS */}
+          <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
             <a
               href={BARBER_INFO.mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => triggerHaptic(30)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-750 active:scale-95 text-zinc-300 text-[11px] border border-zinc-700 transition-all shadow-md"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-750 active:scale-95 text-zinc-300 text-[11px] border border-zinc-700 transition-all shadow-md"
             >
               <MapPin className="w-3.5 h-3.5 text-amber-400" />
-              <span>Piornal (Cómo llegar)</span>
+              <span>Piornal</span>
             </a>
 
             <a
@@ -494,11 +488,40 @@ export default function BookingPage() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => triggerHaptic(30)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-750 active:scale-95 text-zinc-300 text-[11px] border border-zinc-700 transition-all shadow-md"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-750 active:scale-95 text-zinc-300 text-[11px] border border-zinc-700 transition-all shadow-md"
             >
               <InstagramIcon className="w-3.5 h-3.5 text-rose-400" />
               <span>@{BARBER_INFO.instagram}</span>
             </a>
+
+            {/* LOGO 1: C.F. PIORNAL SUELTO */}
+            <div 
+              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 p-0.5 shadow-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+              title="C.F. Piornal"
+              onClick={() => triggerHaptic(20)}
+            >
+              <Image
+                src="/cf-piornal.png"
+                alt="C.F. Piornal"
+                width={20}
+                height={20}
+                className="object-contain"
+              />
+            </div>
+
+            {/* LOGO 2: JARRAMPLAS SUELTO */}
+            <div 
+              className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 overflow-hidden shadow-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+              title="Jarramplas Piornal"
+              onClick={() => triggerHaptic(20)}
+            >
+              <Image
+                src="/jarramplas.jpg"
+                alt="Jarramplas"
+                fill
+                className="object-cover"
+              />
+            </div>
           </div>
         </div>
 
@@ -525,111 +548,56 @@ export default function BookingPage() {
       {/* CONTENIDO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
-        {/* PASO 1: SERVICIOS + SECCIÓN JARRAMPLAS & C.F. PIORNAL */}
+        {/* PASO 1: SELECCIONAR SERVICIO */}
         {step === 1 && (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
-                  <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
-                </h2>
-                <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
-              </div>
-
-              <div className="grid gap-2.5">
-                {SERVICES.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      triggerHaptic(40);
-                      setSelectedService(s);
-                      setStep(2);
-                    }}
-                    className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
-                      s.popular
-                        ? "neon-border-box"
-                        : "bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 border-zinc-800/90 text-zinc-200"
-                    }`}
-                  >
-                    {s.popular && (
-                      <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md z-10">
-                        <Sparkles className="w-2.5 h-2.5" /> Más pedido
-                      </span>
-                    )}
-                    <div className="relative z-10">
-                      <h3 className="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition-colors">
-                        {s.name}
-                      </h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">{s.description}</p>
-                      <span className="text-[11px] text-zinc-500 mt-1 inline-block">
-                        ⏱️ {s.duration} min
-                      </span>
-                    </div>
-                    <div className="text-right pl-3 flex items-center gap-2 relative z-10">
-                      <span className="text-base font-black text-amber-400">{s.price} €</span>
-                      <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 transition-colors" />
-                    </div>
-                  </button>
-                ))}
-              </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
+              </h2>
+              <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
             </div>
 
-            {/* SECCIÓN ESPECIAL: ORGULLO PIORNALEGO (C.F. PIORNAL #10 Y MÁSCARA JARRAMPLAS) */}
-            <div className="pt-2">
-              <div className="p-4 rounded-3xl bg-gradient-to-b from-zinc-900/90 to-zinc-950 border border-zinc-800/80 shadow-2xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-black uppercase tracking-wider text-zinc-200">
-                      ADN & Raíces • Piornal
+            <div className="grid gap-2.5">
+              {SERVICES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    triggerHaptic(40);
+                    setSelectedService(s);
+                    setStep(2);
+                  }}
+                  className={`text-left p-4 rounded-2xl border transition-all flex items-center justify-between relative overflow-hidden group shadow-lg active:scale-[0.98] ${
+                    s.popular
+                      ? "neon-border-box"
+                      : "bg-zinc-900/90 hover:bg-zinc-850 hover:border-amber-500/40 border-zinc-800/90 text-zinc-200"
+                  }`}
+                >
+                  {s.popular && (
+                    <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-400 text-zinc-950 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-xl flex items-center gap-0.5 shadow-md z-10">
+                      <Sparkles className="w-2.5 h-2.5" /> Más pedido
+                    </span>
+                  )}
+                  <div className="relative z-10">
+                    <h3 className="font-bold text-sm text-zinc-100 group-hover:text-amber-400 transition-colors">
+                      {s.name}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">{s.description}</p>
+                    <span className="text-[11px] text-zinc-500 mt-1 inline-block">
+                      ⏱️ {s.duration} min
                     </span>
                   </div>
-                  <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                    Tradición
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  {/* TARJETA 1: C.F. PIORNAL DORSAL 10 */}
-                  <div className="relative bg-zinc-950/80 border border-zinc-800/90 rounded-2xl p-3 flex flex-col items-center text-center overflow-hidden group hover:border-amber-500/40 transition">
-                    <div className="relative w-16 h-16 mb-2">
-                      <Image
-                        src="/cf-piornal.png"
-                        alt="C.F. Piornal"
-                        fill
-                        className="object-contain filter drop-shadow-[0_2px_10px_rgba(239,68,68,0.3)] group-hover:scale-105 transition-transform"
-                      />
-                    </div>
-                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest bg-amber-500/15 px-2 py-0.5 rounded-full mb-1 border border-amber-500/30">
-                      Dorsal #10
-                    </span>
-                    <h4 className="text-xs font-bold text-zinc-100">C.F. Piornal</h4>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">El diez del pueblo en el campo</p>
+                  <div className="text-right pl-3 flex items-center gap-2 relative z-10">
+                    <span className="text-base font-black text-amber-400">{s.price} €</span>
+                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 transition-colors" />
                   </div>
-
-                  {/* TARJETA 2: MÁSCARA DE JARRAMPLAS */}
-                  <div className="relative bg-zinc-950/80 border border-zinc-800/90 rounded-2xl p-3 flex flex-col items-center text-center overflow-hidden group hover:border-amber-500/40 transition">
-                    <div className="relative w-16 h-16 mb-2 rounded-xl overflow-hidden border border-zinc-800 shadow-inner">
-                      <Image
-                        src="/jarramplas.jpg"
-                        alt="Máscara Jarramplas creada por el barbero"
-                        fill
-                        className="object-cover group-hover:scale-110 transition-transform duration-300"
-                      />
-                    </div>
-                    <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest bg-rose-500/15 px-2 py-0.5 rounded-full mb-1 border border-rose-500/30">
-                      Hecha a mano
-                    </span>
-                    <h4 className="text-xs font-bold text-zinc-100">Jarramplas</h4>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Máscara creada por el barbero</p>
-                  </div>
-                </div>
-              </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* PASO 2: HORARIOS CON ILUMINACIÓN AMBIENTAL */}
+        {/* PASO 2: HORARIOS */}
         {step === 2 && selectedService && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
@@ -774,7 +742,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 3: TICKET VIP Y DATOS */}
+        {/* PASO 3: TICKET VIP Y FORMULARIO */}
         {step === 3 && selectedService && (
           <div className="space-y-4">
             <button
@@ -787,7 +755,7 @@ export default function BookingPage() {
               <ArrowLeft className="w-3.5 h-3.5" /> Modificar fecha u hora
             </button>
 
-            {/* TICKET VIP PERFORADO */}
+            {/* TICKET VIP DIGITAL PERFORADO */}
             <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden">
               <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
               <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
@@ -887,7 +855,6 @@ export default function BookingPage() {
               </p>
             </div>
 
-            {/* TICKET PERFORADO FINAL */}
             <div className="relative max-w-xs mx-auto bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden text-left">
               <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
               <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
@@ -932,22 +899,47 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* PIE DE PÁGINA: FIRMA DE AUTOR */}
+      {/* PIE DE PÁGINA: TU HUELLA DE AUTOR (DESPLIEGUE A 1 SOLO TOQUE) */}
       <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
         <button
           onClick={handleSignatureClick}
-          className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-400 active:text-amber-400 transition"
+          className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-amber-400 active:scale-95 transition"
         >
           <Code2 className="w-3.5 h-3.5 text-zinc-600" />
-          <span>Designed & Built with precision by <strong className="font-semibold text-zinc-400 hover:text-amber-400">Borja</strong></span>
+          <span>Designed & Built with precision by <strong className="font-bold text-zinc-300 hover:text-amber-400 underline decoration-amber-500/50 underline-offset-2">Borja</strong></span>
         </button>
       </footer>
 
-      {/* EASTER EGG FLOTANTE */}
-      {showEasterEgg && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-zinc-900 border border-amber-500/60 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-2 text-xs font-bold text-amber-300 animate-bounce">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>⚡ Desarrollado a medida para JBarbers por Borjita • 2026</span>
+      {/* TARJETA DE AUTOR DESPLEGABLE A 1 SOLO TOQUE */}
+      {showCreatorBadge && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-xs bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)] relative">
+            <button
+              onClick={() => setShowCreatorBadge(false)}
+              className="absolute top-3 right-3 text-zinc-500 hover:text-zinc-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 bg-amber-500/15 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-amber-400">
+              <Sparkles className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-zinc-100">Desarrollo & Diseño Web</h3>
+              <p className="text-xs text-amber-400 font-semibold mt-0.5">Creado a medida por Borja</p>
+              <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
+                Plataforma exclusiva desarrollada para la digitalización de <strong>JBarbers Piornal</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowCreatorBadge(false)}
+              className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold transition shadow-md shadow-amber-500/20"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       )}
 
