@@ -21,7 +21,8 @@ import {
   Sparkles,
   AlertCircle,
   ShieldCheck,
-  Code2
+  Code2,
+  Ticket
 } from "lucide-react";
 
 function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -34,7 +35,7 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
-// 1. SONIDO METÁLICO/MECÁNICO SINTÉTICO (Web Audio API)
+// SONIDO MECÁNICO SINTÉTICO (Web Audio API)
 const playMechanicalClick = () => {
   if (typeof window === "undefined") return;
   try {
@@ -56,9 +57,7 @@ const playMechanicalClick = () => {
 
     osc.start();
     osc.stop(ctx.currentTime + 0.04);
-  } catch {
-    // Si el usuario tiene el audio bloqueado, sigue sin fallar
-  }
+  } catch {}
 };
 
 const triggerHaptic = (duration = 45) => {
@@ -103,19 +102,16 @@ export default function BookingPage() {
   const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
   const [waitlistName, setWaitlistName] = useState<string>("");
 
-  // HUELLA DE AUTOR: Contador de toques secretos
+  // Huella de autor secreta
   const [signatureTaps, setSignatureTaps] = useState<number>(0);
   const [showEasterEgg, setShowEasterEgg] = useState<boolean>(false);
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
-  // Reloj en tiempo real
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setCurrentTimeStr(
-        now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
-      );
+      setCurrentTimeStr(now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
     };
     updateTime();
     const timer = setInterval(updateTime, 10000);
@@ -170,7 +166,6 @@ export default function BookingPage() {
     fetchOccupiedSlots();
   }, [selectedDate]);
 
-  // Detector de toques secretos en tu firma
   const handleSignatureClick = () => {
     const nextCount = signatureTaps + 1;
     setSignatureTaps(nextCount);
@@ -264,7 +259,6 @@ export default function BookingPage() {
     setWaitlistName("");
   };
 
-  // SPLASH SCREEN
   if (showSplash) {
     return (
       <div className="fixed inset-0 bg-zinc-950 flex flex-col items-center justify-center z-50">
@@ -293,9 +287,9 @@ export default function BookingPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-32 relative overflow-x-hidden">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-36 relative overflow-x-hidden">
       
-      {/* ESTILOS DE ANIMACIÓN: CHISPAS + BORDE DE NEÓN GIRATORIO + SHIMMER */}
+      {/* MEJORA 2: POLVO DE ORO FLOTANTE + EFECTOS VISUALES */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -349,7 +343,6 @@ export default function BookingPage() {
           animation: goldShimmer 3.5s infinite ease-in-out;
           pointer-events: none;
         }
-        /* BORDE GIRATORIO DE LUZ */
         @keyframes rotateBorder {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -381,21 +374,29 @@ export default function BookingPage() {
           background: #18181b;
           border-radius: inherit;
         }
-        /* CHISPAS DORADAS AL CONFIRMAR */
-        @keyframes sparkFly {
-          0% { transform: translateY(0) scale(1); opacity: 1; }
-          100% { transform: translateY(-120px) translateX(var(--tx)) scale(0); opacity: 0; }
+        /* POLVO DORADO FLOTANTE */
+        @keyframes floatDust {
+          0% { transform: translateY(0px) translateX(0px); opacity: 0.2; }
+          50% { transform: translateY(-35px) translateX(15px); opacity: 0.7; }
+          100% { transform: translateY(-70px) translateX(-10px); opacity: 0; }
         }
-        .sparkle-dot {
-          position: absolute;
-          width: 6px;
-          height: 6px;
+        .gold-dust {
+          position: fixed;
+          width: 3px;
+          height: 3px;
           background: #fbbf24;
           border-radius: 50%;
-          box-shadow: 0 0 10px #f59e0b;
-          animation: sparkFly 1.2s ease-out forwards;
+          box-shadow: 0 0 8px #f59e0b;
+          pointer-events: none;
+          z-index: 1;
         }
       ` }} />
+
+      {/* PARTÍCULAS DE POLVO DORADO FLOTANDO EN EL FONDO */}
+      <div className="gold-dust" style={{ top: "25%", left: "15%", animation: "floatDust 6s infinite ease-in-out" }} />
+      <div className="gold-dust" style={{ top: "45%", left: "80%", animation: "floatDust 8s 1.5s infinite ease-in-out" }} />
+      <div className="gold-dust" style={{ top: "70%", left: "30%", animation: "floatDust 7s 3s infinite ease-in-out" }} />
+      <div className="gold-dust" style={{ top: "85%", left: "75%", animation: "floatDust 9s 2s infinite ease-in-out" }} />
 
       {/* TIRA BARBER POLE */}
       <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
@@ -443,7 +444,7 @@ export default function BookingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
         </div>
 
-        {/* LIVE BADGE + RELOJ EN DIRECTO */}
+        {/* LIVE BADGE + WIDGET PIORNAL */}
         <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
           {nextAvailableToday ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-amber-500/50 text-amber-400 text-[11px] font-semibold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -457,7 +458,6 @@ export default function BookingPage() {
             </div>
           )}
 
-          {/* Micro-widget reloj de Piornal */}
           <div className="px-2.5 py-1 rounded-full bg-zinc-950/80 backdrop-blur-md border border-zinc-800 text-[11px] text-zinc-300 font-mono flex items-center gap-1 shadow-md">
             <span className="text-zinc-500">Piornal</span>
             <span className="text-amber-400 font-bold">{currentTimeStr}</span>
@@ -507,11 +507,22 @@ export default function BookingPage() {
           </div>
         </div>
 
+        {/* MEJORA 4: CÁPSULA ESTILO DYNAMIC ISLAND CON PROGRESO */}
         {step < 4 && (
-          <div className="grid grid-cols-3 text-center border-t border-zinc-800 bg-zinc-950/80 text-[11px] py-2.5">
-            <span className={step >= 1 ? "text-amber-400 font-bold drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "text-zinc-600"}>1. Servicio</span>
-            <span className={step >= 2 ? "text-amber-400 font-bold drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "text-zinc-600"}>2. Fecha y Hora</span>
-            <span className={step >= 3 ? "text-amber-400 font-bold drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "text-zinc-600"}>3. Confirmar</span>
+          <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/70 flex justify-center">
+            <div className="w-full max-w-xs bg-zinc-900/90 border border-zinc-700/60 rounded-full px-4 py-1.5 flex items-center justify-between shadow-inner">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-[11px] font-bold text-zinc-200">
+                  {step === 1 && "Paso 1 de 3 • Seleccionar corte"}
+                  {step === 2 && "Paso 2 de 3 • Elegir día y hora"}
+                  {step === 3 && "Paso 3 de 3 • Confirmar cita"}
+                </span>
+              </div>
+              <span className="text-[10px] font-black text-amber-400">
+                {step === 1 ? "33%" : step === 2 ? "66%" : "100%"}
+              </span>
+            </div>
           </div>
         )}
       </header>
@@ -519,14 +530,14 @@ export default function BookingPage() {
       {/* CONTENIDO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
-        {/* PASO 1: SELECCIONAR SERVICIO */}
+        {/* PASO 1: SELECCIONAR SERVICIO CON ACABADO TITANIO */}
         {step === 1 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-black tracking-wider uppercase text-zinc-300 flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-amber-400" /> Elige tu servicio
+                <Scissors className="w-4 h-4 text-amber-400" /> Catálogo de servicios
               </h2>
-              <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} cortes</span>
+              <span className="text-[11px] text-zinc-500 font-semibold">{SERVICES.length} opciones</span>
             </div>
 
             <div className="grid gap-2.5">
@@ -568,7 +579,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 2: HORARIOS CON FILTRO INTELIGENTE */}
+        {/* PASO 2: HORARIOS CON ILUMINACIÓN AMBIENTAL REACTIVA */}
         {step === 2 && selectedService && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
@@ -629,9 +640,10 @@ export default function BookingPage() {
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                    <Sun className="w-3.5 h-3.5 text-amber-400" /> Mañanas
+                {/* MAÑANAS CON RESPLANDOR SOLAR */}
+                <div className="p-3 rounded-2xl bg-amber-500/[0.03] border border-amber-500/20 space-y-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
+                    <Sun className="w-3.5 h-3.5 text-amber-400" /> Turnos de Mañana
                   </h3>
                   <div className="grid grid-cols-4 gap-2">
                     {BARBER_INFO.morningSlots.map((time) => {
@@ -669,9 +681,10 @@ export default function BookingPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                    <Moon className="w-3.5 h-3.5 text-indigo-400" /> Tardes
+                {/* TARDES CON RESPLANDOR ÍNDIGO */}
+                <div className="p-3 rounded-2xl bg-indigo-500/[0.03] border border-indigo-500/20 space-y-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-400/90 flex items-center gap-1.5">
+                    <Moon className="w-3.5 h-3.5 text-indigo-400" /> Turnos de Tarde
                   </h3>
                   <div className="grid grid-cols-4 gap-2">
                     {BARBER_INFO.afternoonSlots.map((time) => {
@@ -713,7 +726,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 3: FORMULARIO */}
+        {/* PASO 3: FORMULARIO + MEJORA 1: TICKET VIP CON PERFORACIONES */}
         {step === 3 && selectedService && (
           <div className="space-y-4">
             <button
@@ -726,22 +739,45 @@ export default function BookingPage() {
               <ArrowLeft className="w-3.5 h-3.5" /> Modificar fecha u hora
             </button>
 
-            <div className="bg-zinc-900/90 p-4 rounded-2xl border border-zinc-800 text-xs space-y-1.5 shadow-lg">
-              <div className="flex justify-between text-zinc-300">
-                <span>Servicio:</span>
-                <span className="font-bold text-zinc-100">{selectedService.name}</span>
+            {/* TICKET VIP DIGITAL PERFORADO */}
+            <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden">
+              {/* Muescas circulares laterales troqueladas */}
+              <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
+              <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
+
+              <div className="flex items-center justify-between pb-3 border-b border-dashed border-zinc-700/80">
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs uppercase tracking-wider">
+                  <Ticket className="w-4 h-4" />
+                  <span>Pase Oficial de Reserva</span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">JB-{selectedTime.replace(":", "")}</span>
               </div>
-              <div className="flex justify-between text-zinc-300">
-                <span>Fecha y Hora:</span>
-                <span className="font-bold text-amber-400">{selectedDate} a las {selectedTime} h</span>
+
+              <div className="py-3 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Servicio:</span>
+                  <span className="font-bold text-zinc-100">{selectedService.name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Fecha y Hora:</span>
+                  <span className="font-black text-amber-400">{selectedDate} • {selectedTime} h</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Precio estimado:</span>
+                  <span className="text-base font-black text-emerald-400">{selectedService.price} €</span>
+                </div>
               </div>
-              <div className="flex justify-between text-zinc-300">
-                <span>Precio:</span>
-                <span className="font-bold text-zinc-100">{selectedService.price} €</span>
+
+              {/* Código de barras decorativo */}
+              <div className="pt-3 border-t border-dashed border-zinc-700/80 flex items-center justify-between">
+                <span className="text-[10px] text-zinc-500 font-mono tracking-widest">||| | ||| || ||| | || |||</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  VERIFICADO
+                </span>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 pt-1">
               <div>
                 <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1 mb-1">
                   <User className="w-3.5 h-3.5 text-amber-400" /> Nombre y Apellidos *
@@ -782,37 +818,55 @@ export default function BookingPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
               <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400" />
               <span>Tu turno se bloqueará en tiempo real para evitar solapamientos.</span>
             </div>
           </div>
         )}
 
-        {/* PASO 4: CONFIRMACIÓN CON CHISPAS DORADAS */}
-        {step === 4 && (
-          <div className="text-center py-12 space-y-4 relative">
-            {/* Lluvia de partículas doradas */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="sparkle-dot" style={{ top: "30%", left: "45%", "--tx": "-40px" } as React.CSSProperties} />
-              <div className="sparkle-dot" style={{ top: "25%", left: "55%", "--tx": "50px" } as React.CSSProperties} />
-              <div className="sparkle-dot" style={{ top: "40%", left: "40%", "--tx": "-70px" } as React.CSSProperties} />
-              <div className="sparkle-dot" style={{ top: "35%", left: "60%", "--tx": "60px" } as React.CSSProperties} />
-              <div className="sparkle-dot" style={{ top: "20%", left: "50%", "--tx": "0px" } as React.CSSProperties} />
+        {/* PASO 4: CONFIRMACIÓN CON TICKET FINAL Y PARTICULAS */}
+        {step === 4 && selectedService && (
+          <div className="text-center py-6 space-y-5">
+            <div className="w-16 h-16 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-pulse">
+              <CheckCircle2 className="w-10 h-10" />
             </div>
 
-            <div className="w-20 h-20 bg-amber-500/15 border border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse">
-              <CheckCircle2 className="w-12 h-12" />
+            <div>
+              <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-wide">
+                ¡Cita Confirmada!
+              </h2>
+              <p className="text-xs text-zinc-400 max-w-xs mx-auto mt-1 leading-relaxed">
+                Hemos enviado todos los datos por WhatsApp al barbero. Guarda este pase en tu móvil:
+              </p>
             </div>
 
-            <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-wide">
-              ¡Cita Registrada!
-            </h2>
-            <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
-              Hemos abierto WhatsApp con todos los detalles de tu turno. El barbero te confirmará la reserva en cuanto lo lea.
-            </p>
+            {/* TICKET PERFORADO PARA CAPTURAR PANTALLA */}
+            <div className="relative max-w-xs mx-auto bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden text-left">
+              <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
+              <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
 
-            <div className="pt-4">
+              <div className="flex items-center justify-between pb-3 border-b border-dashed border-zinc-700">
+                <span className="text-xs font-black text-amber-400 uppercase">JBARBERS PIORNAL</span>
+                <span className="text-[10px] font-mono text-zinc-400">{selectedDate}</span>
+              </div>
+
+              <div className="py-3 text-xs space-y-1.5">
+                <p className="font-bold text-zinc-100 text-sm">{clientName}</p>
+                <p className="text-zinc-400">{selectedService.name} • <strong className="text-emerald-400">{selectedService.price} €</strong></p>
+                <p className="text-amber-400 font-extrabold text-sm flex items-center gap-1">
+                  <span>⏰ Hora: {selectedTime} h</span>
+                </p>
+                <p className="text-[10px] text-zinc-500 pt-1">📍 C. Hernán Cortés 13, Piornal</p>
+              </div>
+
+              <div className="pt-2 border-t border-dashed border-zinc-700 flex justify-between items-center">
+                <span className="text-[9px] font-mono text-zinc-500">|||| || | |||| |||</span>
+                <span className="text-[9px] font-bold text-emerald-400 uppercase">RESERVA ACTIVA</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
               <button
                 onClick={() => {
                   triggerHaptic(30);
@@ -832,7 +886,7 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* PIE DE PÁGINA: TU HUELLA DE AUTOR DISCRETA */}
+      {/* PIE DE PÁGINA: FIRMA DE AUTOR CON EASTER EGG */}
       <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
         <button
           onClick={handleSignatureClick}
@@ -843,7 +897,7 @@ export default function BookingPage() {
         </button>
       </footer>
 
-      {/* EASTER EGG SECRETO AL TOCAR 5 VECES TU NOMBRE */}
+      {/* EASTER EGG FLOTANTE */}
       {showEasterEgg && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-zinc-900 border border-amber-500/60 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-2 text-xs font-bold text-amber-300 animate-bounce">
           <Sparkles className="w-4 h-4 text-amber-400" />
