@@ -37,9 +37,7 @@ const triggerHaptic = (duration = 45) => {
   if (typeof window !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate(duration);
-    } catch {
-      // Ignorar si el navegador no lo soporta
-    }
+    } catch {}
   }
 };
 
@@ -87,13 +85,7 @@ export default function BookingPage() {
     else setGreeting("Buenas noches 🌙");
 
     const pInterval = setInterval(() => {
-      setSplashProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(pInterval);
-          return 100;
-        }
-        return prev + 25;
-      });
+      setSplashProgress((prev) => (prev >= 100 ? 100 : prev + 25));
     }, 100);
 
     const timer = setTimeout(() => {
@@ -131,19 +123,18 @@ export default function BookingPage() {
     fetchOccupiedSlots();
   }, [selectedDate]);
 
-  // CONFIRMACIÓN CON PROTOCOLO ANTI-SOLAPAMIENTO ESTRICTO
+  // Protocolo estricto anti-solapamiento
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
       return;
     }
 
-    if (isSubmitting) return; // Evitar doble clic
+    if (isSubmitting) return;
     setIsSubmitting(true);
     triggerHaptic(50);
 
     try {
-      // 1. Comprobación relámpago en vivo antes de guardar
       const { data: existingSlots, error: checkError } = await supabase
         .from("appointments")
         .select("id")
@@ -157,12 +148,11 @@ export default function BookingPage() {
         alert(`⚠️ ¡Vaya! Justo acaban de reservar las ${selectedTime} h hace un instante. Por favor, selecciona otro hueco.`);
         setBookedSlots((prev) => [...prev, selectedTime]);
         setSelectedTime("");
-        setStep(2); // Regresar al selector de horas
+        setStep(2);
         setIsSubmitting(false);
         return;
       }
 
-      // 2. Guardar si el hueco sigue libre
       const { error: insertError } = await supabase.from("appointments").insert([
         {
           client_name: clientName.trim(),
@@ -178,7 +168,6 @@ export default function BookingPage() {
 
       if (insertError) throw insertError;
 
-      // 3. Abrir WhatsApp con la cita cerrada
       const message =
         `💈 *SOLICITUD DE CITA - ${BARBER_INFO.name.toUpperCase()}* 💈\n\n` +
         `✂️ *Servicio:* ${selectedService.name} (${selectedService.price} €)\n` +
@@ -215,6 +204,7 @@ export default function BookingPage() {
     setWaitlistName("");
   };
 
+  // SPLASH SCREEN ELEGANTE
   if (showSplash) {
     return (
       <div className="fixed inset-0 bg-zinc-950 flex flex-col items-center justify-center z-50">
@@ -243,8 +233,8 @@ export default function BookingPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black">
-      {/* ESTILOS DE LA CINTA MARQUEE EN MOVIMIENTO */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center selection:bg-amber-500 selection:text-black pb-28">
+      {/* ANIMACIONES CSS: BARBER POLE + MARQUEE + GOLD SHIMMER */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes tickerMove {
           0% { transform: translate3d(0, 0, 0); }
@@ -255,12 +245,56 @@ export default function BookingPage() {
           width: 200%;
           animation: tickerMove 20s linear infinite;
         }
-        .marquee-container:hover {
-          animation-play-state: paused;
+        @keyframes barberPoleMove {
+          0% { background-position: 0 0; }
+          100% { background-position: 40px 0; }
+        }
+        .barber-pole-stripe {
+          background: repeating-linear-gradient(
+            -45deg,
+            #ef4444,
+            #ef4444 10px,
+            #ffffff 10px,
+            #ffffff 20px,
+            #3b82f6 20px,
+            #3b82f6 30px,
+            #ffffff 30px,
+            #ffffff 40px
+          );
+          background-size: 56px 100%;
+          animation: barberPoleMove 1.5s linear infinite;
+        }
+        /* RESPLANDOR DE ORO LÍQUIDO */
+        @keyframes goldShimmer {
+          0% { transform: translateX(-150%) skewX(-20deg); }
+          50%, 100% { transform: translateX(250%) skewX(-20deg); }
+        }
+        .shimmer-gold {
+          position: relative;
+          overflow: hidden;
+        }
+        .shimmer-gold::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.45),
+            transparent
+          );
+          animation: goldShimmer 3.5s infinite ease-in-out;
+          pointer-events: none;
         }
       ` }} />
 
-      {/* CINTA MARQUEE EN MOVIMIENTO CONTINUO */}
+      {/* TIRA TRADICIONAL DE BARBER POLE */}
+      <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
+
+      {/* CINTA MARQUEE EN MOVIMIENTO */}
       <div className="w-full max-w-lg overflow-hidden bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-zinc-950 py-1.5 border-b border-amber-400/40 shadow-lg select-none">
         <div className="marquee-container text-[11px] font-black tracking-widest uppercase">
           <div className="flex items-center gap-6 whitespace-nowrap">
@@ -272,7 +306,7 @@ export default function BookingPage() {
             <span>•</span>
             <span>📍 C. HERNÁN CORTÉS 13</span>
             <span>•</span>
-            <span>🔥 CALIDAD & ESTILO URBANO</span>
+            <span>🔥 ESTILO URBANO & CLÁSICO</span>
             <span>•</span>
           </div>
           <div className="flex items-center gap-6 whitespace-nowrap pl-6">
@@ -284,7 +318,7 @@ export default function BookingPage() {
             <span>•</span>
             <span>📍 C. HERNÁN CORTÉS 13</span>
             <span>•</span>
-            <span>🔥 CALIDAD & ESTILO URBANO</span>
+            <span>🔥 ESTILO URBANO & CLÁSICO</span>
             <span>•</span>
           </div>
         </div>
@@ -303,7 +337,7 @@ export default function BookingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
         </div>
 
-        {/* LIVE BADGE EN TIEMPO REAL */}
+        {/* LIVE BADGE */}
         <div className="absolute top-3 left-3 z-10">
           {nextAvailableToday ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-amber-500/50 text-amber-400 text-[11px] font-semibold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -318,7 +352,7 @@ export default function BookingPage() {
           )}
         </div>
 
-        {/* LOGOTIPO OFICIAL */}
+        {/* LOGO */}
         <div className="relative -mt-16 px-5 pb-4 text-center flex flex-col items-center">
           <div className="relative w-32 h-16 mb-2 hover:scale-105 transition-transform duration-300">
             <Image
@@ -560,22 +594,6 @@ export default function BookingPage() {
                 </div>
               </>
             )}
-
-            <button
-              disabled={!selectedTime}
-              onClick={() => {
-                triggerHaptic(50);
-                setStep(3);
-              }}
-              className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                selectedTime
-                  ? "bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-xl shadow-amber-500/20"
-                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-              }`}
-            >
-              <span>Continuar con la hora ({selectedTime || "--:--"})</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
         )}
 
@@ -650,21 +668,8 @@ export default function BookingPage() {
 
             <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
               <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>Tu turno se bloqueará en tiempo real para evitar que nadie te quite la hora.</span>
+              <span>Tu turno se bloqueará en tiempo real para evitar solapamientos.</span>
             </div>
-
-            <button
-              disabled={!clientName.trim() || !clientPhone.trim() || isSubmitting}
-              onClick={handleConfirmBooking}
-              className={`w-full py-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                clientName.trim() && clientPhone.trim() && !isSubmitting
-                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(5,150,105,0.3)]"
-                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-              }`}
-            >
-              <MessageCircle className="w-4 h-4 fill-current" />
-              <span>{isSubmitting ? "Comprobando disponibilidad..." : "Confirmar y enviar por WhatsApp"}</span>
-            </button>
           </div>
         )}
 
@@ -699,6 +704,48 @@ export default function BookingPage() {
           </div>
         )}
       </main>
+
+      {/* BARRA FLOTANTE FIJA INFERIOR (STICKY BOTTOM BAR) CON RESPLANDOR DE ORO LÍQUIDO */}
+      {step === 2 && (
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-zinc-950/85 backdrop-blur-md border-t border-zinc-800/80 z-40 flex justify-center">
+          <div className="w-full max-w-lg">
+            <button
+              disabled={!selectedTime}
+              onClick={() => {
+                triggerHaptic(50);
+                setStep(3);
+              }}
+              className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl ${
+                selectedTime
+                  ? "bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-amber-500/25 shimmer-gold"
+                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+              }`}
+            >
+              <span>Continuar con la hora ({selectedTime || "--:--"})</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-zinc-950/85 backdrop-blur-md border-t border-zinc-800/80 z-40 flex justify-center">
+          <div className="w-full max-w-lg">
+            <button
+              disabled={!clientName.trim() || !clientPhone.trim() || isSubmitting}
+              onClick={handleConfirmBooking}
+              className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl ${
+                clientName.trim() && clientPhone.trim() && !isSubmitting
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 shimmer-gold"
+                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+              }`}
+            >
+              <MessageCircle className="w-4 h-4 fill-current" />
+              <span>{isSubmitting ? "Bloqueando cita..." : "Confirmar y enviar por WhatsApp"}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: LISTA DE ESPERA */}
       {showWaitlistModal && (
