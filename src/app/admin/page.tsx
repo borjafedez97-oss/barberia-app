@@ -126,7 +126,6 @@ export default function AdminPage() {
     if (!selectedDate) return;
     setLoading(true);
 
-    // 1. Citas del día
     const { data: dayData } = await supabase
       .from("appointments")
       .select("*")
@@ -135,7 +134,6 @@ export default function AdminPage() {
 
     if (dayData) setAppointments(dayData as Appointment[]);
 
-    // 2. Todas las citas para estadísticas
     const { data: allData } = await supabase
       .from("appointments")
       .select("*")
@@ -143,7 +141,6 @@ export default function AdminPage() {
 
     if (allData) setAllAppointments(allData as Appointment[]);
 
-    // 3. Lista de espera completa ordenada cronológicamente (antiguos primero)
     const { data: wlData } = await supabase
       .from("waitlist")
       .select("*")
@@ -160,7 +157,7 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, selectedDate]);
 
-  // Realtime para citas y para lista de espera
+  // Realtime para citas y lista de espera
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -211,7 +208,7 @@ export default function AdminPage() {
     }
   };
 
-  // BOTÓN 1: ACEPTAR CITA (Pasa a confirmado y abre WhatsApp)
+  // 1. ACEPTAR CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleAcceptAppointment = async (app: Appointment) => {
     await updateStatus(app.id, "confirmed");
 
@@ -226,11 +223,11 @@ export default function AdminPage() {
         `📍 *Dirección:* ${BARBER_INFO.address}\n\n` +
         `¡Te espero allí! Si te surge cualquier cosa avísame por aquí.`;
 
-      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+      window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
   };
 
-  // AVISAR A ALGUIEN DE LA LISTA DE ESPERA
+  // 2. AVISAR A LA LISTA DE ESPERA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleContactWaitlistClient = (entry: WaitlistEntry) => {
     const cleanPhone = entry.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
@@ -240,7 +237,7 @@ export default function AdminPage() {
       `¡Buenas, *${entry.client_name}*! Te escribo porque estabas apuntado en la lista de espera para el *${entry.target_date}* y se me acaba de liberar un hueco.\n\n` +
       `¿Sigues interesado en cortarte el pelo hoy? Respóndeme a este mensaje y te guardo la hora. ¡Gracias!`;
 
-    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const handleDeleteWaitlistEntry = async (id: string) => {
@@ -306,28 +303,31 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  // 3. ANULAR CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleConfirmCancellation = async (sendWhatsApp: boolean) => {
     if (!cancelModalApp) return;
-    await updateStatus(cancelModalApp.id, "cancelled");
+    const appToCancel = cancelModalApp;
+    setCancelModalApp(null);
 
-    if (sendWhatsApp && cancelModalApp.client_phone !== "En local") {
-      const cleanPhone = cancelModalApp.client_phone.replace(/\D/g, "");
+    await updateStatus(appToCancel.id, "cancelled");
+
+    if (sendWhatsApp && appToCancel.client_phone !== "En local") {
+      const cleanPhone = appToCancel.client_phone.replace(/\D/g, "");
       const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
       const webUrl = typeof window !== "undefined" ? window.location.origin : "nuestra web";
 
       const text =
         `💈 *AVISO DE CANCELACIÓN - JBARBERS* 💈\n\n` +
-        `¡Buenas, *${cancelModalApp.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita del día *${cancelModalApp.booking_date}* a las *${cancelModalApp.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
+        `¡Buenas, *${appToCancel.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita del día *${appToCancel.booking_date}* a las *${appToCancel.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
         `🙏 Te pido mil disculpas por el contratiempo. Puedes volver a pedir cita en cualquier otro hueco libre entrando aquí:\n` +
         `👉 ${webUrl}\n\n` +
         `O si lo prefieres, dime qué otra hora te vendría bien y te busco un hueco. ¡Muchas gracias por la comprensión!`;
 
-      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+      window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
-
-    setCancelModalApp(null);
   };
 
+  // 4. AVISO DE RETRASO (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleSendDelayNotice = (app: Appointment) => {
     if (app.client_phone === "En local") return;
 
@@ -339,7 +339,7 @@ export default function AdminPage() {
       `¡Buenas, *${app.client_name}*! Te aviso con un poco de antelación de que voy con unos *10-15 minutos de retraso* con los cortes de antes.\n\n` +
       `Para que no tengas que estar esperando aquí de pie, puedes venirte con calma sobre las *${app.booking_time}* y cuarto. ¡Disculpa las molestias y nos vemos ahora!`;
 
-    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const handleShareStorySlot = (slotTime: string) => {
@@ -377,6 +377,7 @@ export default function AdminPage() {
     }
   };
 
+  // 5. RECORDATORIO DE CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const sendWhatsAppReminder = (app: Appointment) => {
     const cleanPhone = app.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
@@ -390,7 +391,7 @@ export default function AdminPage() {
       `📍 *Dirección:* ${BARBER_INFO.address}\n\n` +
       `Si te surge cualquier imprevisto avísame por aquí. ¡Nos vemos!`;
 
-    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, "_blank");
+    window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const setQuickDate = (daysOffset: number) => {
@@ -602,7 +603,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* CABECERA CON PESTAÑAS (AGENDA vs LISTA DE ESPERA) */}
+      {/* CABECERA */}
       <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
@@ -677,7 +678,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* SELECTOR RÁPIDO DE FECHA (SOLO EN VISTA AGENDA) */}
+        {/* SELECTOR RÁPIDO DE FECHA */}
         {currentView === "agenda" && (
           <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/80 flex-wrap">
             <div className="flex items-center gap-1.5">
