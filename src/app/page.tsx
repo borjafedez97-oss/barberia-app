@@ -37,6 +37,7 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
+// 1. SONIDO MECÁNICO TÁCTIL (Web Audio API)
 const playMechanicalClick = () => {
   if (typeof window === "undefined") return;
   try {
@@ -61,6 +62,7 @@ const playMechanicalClick = () => {
   } catch {}
 };
 
+// 2. SONIDO ARMÓNICO CELESTIAL PARA EL AURA DEL LOGO
 const playAuraSound = () => {
   if (typeof window === "undefined") return;
   try {
@@ -225,7 +227,6 @@ export default function BookingPage() {
     };
   }, [selectedDate]);
 
-  // Botón manual de recarga
   const handleManualRefresh = async () => {
     triggerHaptic(30);
     setIsRefreshing(true);
@@ -256,6 +257,7 @@ export default function BookingPage() {
     setShowCreatorBadge((prev) => !prev);
   };
 
+  // CONFIRMACIÓN DE CITA SIN PESTAÑAS EN BLANCO
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -311,8 +313,15 @@ export default function BookingPage() {
         (notes.trim() ? `📝 *Nota:* ${notes.trim()}\n\n` : "\n") +
         `¿Me confirmas disponibilidad? ¡Gracias!`;
 
-      window.open(`https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(message)}`, "_blank");
+      // 1. Pasamos inmediatamente al ticket VIP confirmado
       goToStep(4);
+
+      // 2. Redirección limpia directa para que NUNCA abra pestaña en blanco en Safari o Instagram
+      const waUrl = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(message)}`;
+      setTimeout(() => {
+        window.location.href = waUrl;
+      }, 150);
+
     } catch (err) {
       console.error(err);
       alert("Hubo un problema de conexión al registrar tu cita. Inténtalo de nuevo.");
@@ -321,7 +330,7 @@ export default function BookingPage() {
     }
   };
 
-  // ENVIAR A LA LISTA DE ESPERA (BD + WHATSAPP)
+  // LISTA DE ESPERA SIN PESTAÑAS EN BLANCO
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!waitlistName.trim() || !waitlistPhone.trim()) {
@@ -333,7 +342,6 @@ export default function BookingPage() {
     setIsSubmittingWaitlist(true);
 
     try {
-      // 1. Guardar en la tabla waitlist de Supabase
       await supabase.from("waitlist").insert([
         {
           client_name: waitlistName.trim(),
@@ -344,7 +352,6 @@ export default function BookingPage() {
         }
       ]);
 
-      // 2. Abrir WhatsApp para avisar al barbero
       const msg =
         `💈 *LISTA DE ESPERA - JBARBERS* 💈\n\n` +
         `¡Buenas! He visto que el día *${selectedDate}* está completo.\n` +
@@ -352,13 +359,14 @@ export default function BookingPage() {
         (waitlistNotes.trim() ? `📝 Preferencia: ${waitlistNotes.trim()}\n\n` : "\n") +
         `Si se libera algún hueco por cancelación a última hora, ¡avísame por favor y me acerco! Gracias.`;
 
-      window.open(`https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(msg)}`, "_blank");
-
-      alert("¡Te hemos añadido a la lista de espera con éxito! El barbero te contactará en cuanto haya una baja.");
       setShowWaitlistModal(false);
       setWaitlistName("");
       setWaitlistPhone("");
       setWaitlistNotes("");
+
+      // Redirección directa sin ventana blanca
+      window.location.href = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(msg)}`;
+
     } catch (err) {
       console.error(err);
       alert("Error al entrar en la lista de espera. Inténtalo de nuevo.");
@@ -1212,7 +1220,7 @@ export default function BookingPage() {
         </div>
       )}
 
-      {/* MODAL LISTA DE ESPERA (CON NOMBRE + TELÉFONO + BASE DE DATOS) */}
+      {/* MODAL LISTA DE ESPERA */}
       {showWaitlistModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <form
