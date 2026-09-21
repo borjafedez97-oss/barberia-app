@@ -216,12 +216,7 @@ export default function AdminPage() {
       const cleanPhone = app.client_phone.replace(/\D/g, "");
       const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
 
-      const text =
-        `💈 *CITA CONFIRMADA - JBARBERS* 💈\n\n` +
-        `¡Buenas, *${app.client_name}*! Te confirmo tu cita para el día *${app.booking_date}* a las *${app.booking_time} h*.\n\n` +
-        `✂️ *Servicio:* ${app.service_name} (${app.price} €)\n` +
-        `📍 *Dirección:* ${BARBER_INFO.address}\n\n` +
-        `¡Te espero allí! Si te surge cualquier cosa avísame por aquí.`;
+      const text = `¡Buenas ${app.client_name}! Cita confirmada para el ${app.booking_date} a las ${app.booking_time} h. ¡Te espero! 💈`;
 
       window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
