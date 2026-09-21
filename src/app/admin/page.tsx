@@ -732,46 +732,18 @@ export default function AdminPage() {
         {/* VISTA 1: AGENDA DEL DÍA */}
         {currentView === "agenda" && (
           <>
-            {/* CAJAS: HOY Y MES */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl shadow-md">
-                <div className="flex items-center justify-between text-zinc-400 text-xs">
-                  <span>Caja de Hoy</span>
-                  <span className="text-emerald-400 font-black text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    {activeAppointments.length} cortes
-                  </span>
-                </div>
-                <p className="text-2xl font-black text-emerald-400 mt-1">{totalDayRevenue} €</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/30 border border-amber-500/30 p-3.5 rounded-2xl shadow-lg relative overflow-hidden flex flex-col justify-between">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-amber-400 font-bold flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" /> Caja del Mes
-                  </span>
-                  <span className="text-[10px] text-zinc-400 font-mono">
-                    {currentMonthApps.length} cortes
-                  </span>
-                </div>
-
-                <div className="my-1">
-                  <p className="text-2xl font-black text-amber-300">{totalCurrentMonthRevenue} €</p>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setSelectedStatsMonth(currentMonthKey);
-                    setShowMonthlyModal(true);
-                  }}
-                  className="w-full mt-1 py-1.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 border border-amber-500/30 rounded-xl text-[11px] font-bold text-amber-300 flex items-center justify-between transition"
-                >
-                  <span className="flex items-center gap-1">
-                    <BarChart3 className="w-3 h-3" /> Ver Esquema Mensual
-                  </span>
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
+            {/* ÚNICA CAJA: CAJA DE HOY */}
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl shadow-md flex items-center justify-between">
+          <div>
+            <span className="text-zinc-400 text-xs font-semibold">Caja de Hoy</span>
+            <p className="text-3xl font-black text-emerald-400 mt-0.5">{totalDayRevenue} €</p>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-bold text-zinc-300 bg-zinc-800 px-3 py-1.5 rounded-xl border border-zinc-700">
+              {activeAppointments.length} cortes
+            </span>
+          </div>
+        </div>
 
             {/* TIMELINE VISUAL */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2 shadow-lg">
@@ -1149,138 +1121,6 @@ export default function AdminPage() {
         )}
       </main>
 
-      {/* MODAL: ESQUEMA INTERACTIVO MENSUAL */}
-      {showMonthlyModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.25)] max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <BarChart3 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-zinc-100">Esquema Mensual de Caja</h3>
-                  <p className="text-[10px] text-amber-400 font-semibold">{getMonthLabel(activeMonthKey)}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowMonthlyModal(false)}
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded-xl hover:bg-zinc-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto pr-1 space-y-4 flex-1">
-              <div className="bg-zinc-950/80 p-3 rounded-2xl border border-zinc-800 space-y-2">
-                <span className="text-[11px] font-bold text-zinc-400">Selecciona o compara meses:</span>
-                
-                <div className="flex items-end gap-2 pt-4 pb-1 h-32 px-2 overflow-x-auto">
-                  {monthlyHistory.map((m) => {
-                    const isSelected = m.monthKey === activeMonthKey;
-                    const heightPercent = Math.max(Math.round((m.revenue / maxHistoricalRevenue) * 100), 12);
-
-                    return (
-                      <button
-                        key={m.monthKey}
-                        onClick={() => setSelectedStatsMonth(m.monthKey)}
-                        className="flex-1 min-w-[50px] flex flex-col items-center justify-end h-full group transition"
-                      >
-                        <span className={`text-[10px] font-bold mb-1 transition ${isSelected ? "text-amber-400" : "text-zinc-500 group-hover:text-zinc-300"}`}>
-                          {m.revenue}€
-                        </span>
-                        
-                        <div className="w-full bg-zinc-850 rounded-t-lg overflow-hidden flex items-end h-20 p-0.5">
-                          <div
-                            style={{ height: `${heightPercent}%` }}
-                            className={`w-full rounded-t transition-all duration-300 ${
-                              isSelected
-                                ? "bg-gradient-to-t from-amber-600 via-amber-500 to-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]"
-                                : "bg-zinc-700 hover:bg-zinc-600"
-                            }`}
-                          />
-                        </div>
-
-                        <span className={`text-[9px] font-mono mt-1 transition ${isSelected ? "text-amber-400 font-bold" : "text-zinc-500"}`}>
-                          {m.monthKey.slice(5)}/{m.monthKey.slice(2, 4)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Total Caja</p>
-                  <p className="text-base font-black text-amber-400 mt-0.5">{activeMonthRevenue} €</p>
-                </div>
-
-                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Cortes</p>
-                  <p className="text-base font-black text-zinc-100 mt-0.5">{filteredMonthApps.length}</p>
-                </div>
-
-                <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
-                  <p className="text-[10px] text-zinc-500 uppercase font-semibold">Ticket Medio</p>
-                  <p className="text-base font-black text-emerald-400 mt-0.5">{activeMonthAverageTicket} €</p>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 p-3 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                    <Award className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Corte Más Pedido</p>
-                    <p className="text-xs font-bold text-zinc-100">{topServiceOfMonth.name}</p>
-                  </div>
-                </div>
-                <span className="text-xs font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-md">
-                  {topServiceOfMonth.count} veces
-                </span>
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-xs font-bold text-zinc-300">
-                  Detalle de citas de {getMonthLabel(activeMonthKey)} ({filteredMonthApps.length}):
-                </p>
-                
-                {filteredMonthApps.length === 0 ? (
-                  <p className="text-xs text-zinc-500 italic p-3 bg-zinc-950 rounded-xl text-center">
-                    No hay citas registradas en este mes.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {filteredMonthApps.map((a) => (
-                      <div
-                        key={a.id}
-                        className="p-2.5 bg-zinc-950 rounded-xl border border-zinc-850 flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <p className="font-bold text-zinc-200">{a.client_name}</p>
-                          <p className="text-[10px] text-zinc-500">
-                            {a.booking_date} a las {a.booking_time} h • {a.service_name}
-                          </p>
-                        </div>
-                        <span className="font-black text-emerald-400">{a.price} €</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowMonthlyModal(false)}
-              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 rounded-xl text-xs font-bold transition"
-            >
-              Cerrar Esquema
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* MODAL: ANULAR CITA */}
       {cancelModalApp && (
