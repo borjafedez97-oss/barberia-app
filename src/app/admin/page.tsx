@@ -54,7 +54,7 @@ interface WaitlistEntry {
   created_at: string;
 }
 
-const ADMIN_PIN = "1234";
+const ADMIN_PIN = "2712200610";
 
 const getMonthLabel = (monthStr: string) => {
   if (!monthStr || !monthStr.includes("-")) return monthStr;
@@ -504,7 +504,7 @@ export default function AdminPage() {
             <input
               type="password"
               inputMode="numeric"
-              maxLength={6}
+              maxLength={10}
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
               placeholder="••••"
