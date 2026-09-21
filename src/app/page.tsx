@@ -257,7 +257,7 @@ export default function BookingPage() {
     setShowCreatorBadge((prev) => !prev);
   };
 
-  // CONFIRMACIÓN DE CITA SIN PESTAÑAS EN BLANCO
+  // CONFIRMACIÓN DE CITA OPTIMIZADA PARA ANDROID Y SAFARI
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -313,13 +313,19 @@ export default function BookingPage() {
         (notes.trim() ? `📝 *Nota:* ${notes.trim()}\n\n` : "\n") +
         `¿Me confirmas disponibilidad? ¡Gracias!`;
 
-      // 1. Pasamos inmediatamente al ticket VIP confirmado
+      // 1. Mostrar el ticket VIP de confirmación inmediatamente
       goToStep(4);
 
-      // 2. Redirección limpia directa para que NUNCA abra pestaña en blanco en Safari o Instagram
+      // 2. Disparar WhatsApp mediante enlace nativo invisible (evita error de Chrome en Android)
       const waUrl = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(message)}`;
       setTimeout(() => {
-        window.location.href = waUrl;
+        const link = document.createElement("a");
+        link.href = waUrl;
+        link.rel = "noopener noreferrer";
+        link.target = "_top";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }, 150);
 
     } catch (err) {
@@ -330,7 +336,7 @@ export default function BookingPage() {
     }
   };
 
-  // LISTA DE ESPERA SIN PESTAÑAS EN BLANCO
+  // LISTA DE ESPERA OPTIMIZADA
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!waitlistName.trim() || !waitlistPhone.trim()) {
@@ -364,8 +370,15 @@ export default function BookingPage() {
       setWaitlistPhone("");
       setWaitlistNotes("");
 
-      // Redirección directa sin ventana blanca
-      window.location.href = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(msg)}`;
+      // Disparar WhatsApp limpiamente
+      const waUrl = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(msg)}`;
+      const link = document.createElement("a");
+      link.href = waUrl;
+      link.rel = "noopener noreferrer";
+      link.target = "_top";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
     } catch (err) {
       console.error(err);

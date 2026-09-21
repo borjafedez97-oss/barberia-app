@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { BARBER_INFO, SERVICES } from "@/data/services";
 import { 
@@ -11,7 +11,6 @@ import {
   Check, 
   X, 
   MessageCircle, 
-  Users, 
   RefreshCw, 
   AlertCircle, 
   Trash2, 
@@ -23,12 +22,9 @@ import {
   CalendarX2, 
   AlertTriangle, 
   Timer,
-  TrendingUp,
-  BarChart3,
-  Award,
-  ChevronRight,
   ClipboardList,
-  CheckCircle2
+  CheckCircle2,
+  ArrowRight
 } from "lucide-react";
 
 interface Appointment {
@@ -54,26 +50,16 @@ interface WaitlistEntry {
   created_at: string;
 }
 
-const ADMIN_PIN = "2712200610";
-
-const getMonthLabel = (monthStr: string) => {
-  if (!monthStr || !monthStr.includes("-")) return monthStr;
-  const [y, m] = monthStr.split("-");
-  const date = new Date(Number(y), Number(m) - 1, 1);
-  const name = date.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-  return name.charAt(0).toUpperCase() + name.slice(1);
-};
+const ADMIN_PIN = "1234";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<boolean>(false);
 
-  // Vistas: 'agenda' o 'waitlist'
   const [currentView, setCurrentView] = useState<"agenda" | "waitlist">("agenda");
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -82,8 +68,9 @@ export default function AdminPage() {
   // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
   const [blockDate, setBlockDate] = useState<string>("");
-  const [blockTime, setBlockTime] = useState<string>("10:00");
-  const [blockReason, setBlockReason] = useState<string>("Descanso / Asunto propio");
+  const [blockStartTime, setBlockStartTime] = useState<string>("16:00");
+  const [blockEndTime, setBlockEndTime] = useState<string>("19:30");
+  const [blockReason, setBlockReason] = useState<string>("Asunto personal / Descanso");
 
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
   const [manualName, setManualName] = useState<string>("");
@@ -102,19 +89,20 @@ export default function AdminPage() {
   } | null>(null);
 
   const [cancelModalApp, setCancelModalApp] = useState<Appointment | null>(null);
-  const [cancelReason, setCancelReason] = useState<string>("un imprevisto de fuerza mayor");
-
-  const [showMonthlyModal, setShowMonthlyModal] = useState<boolean>(false);
-  const [selectedStatsMonth, setSelectedStatsMonth] = useState<string>("");
+  const [cancelReason, setCancelReason] = useState<string>("un imprevisto");
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
+
+  // Cálculo de los slots incluidos en el rango seleccionado
+  const slotsToBlock = allSlots.filter((slot) => {
+    return slot >= blockStartTime && slot <= blockEndTime;
+  });
 
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     setSelectedDate(today);
     setBlockDate(today);
     setManualDate(today);
-    setSelectedStatsMonth(today.substring(0, 7));
 
     const sessionAuth = sessionStorage.getItem("jbarbers_auth");
     if (sessionAuth === "true") {
@@ -134,13 +122,6 @@ export default function AdminPage() {
 
     if (dayData) setAppointments(dayData as Appointment[]);
 
-    const { data: allData } = await supabase
-      .from("appointments")
-      .select("*")
-      .order("booking_date", { ascending: false });
-
-    if (allData) setAllAppointments(allData as Appointment[]);
-
     const { data: wlData } = await supabase
       .from("waitlist")
       .select("*")
@@ -157,12 +138,11 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, selectedDate]);
 
-  // Realtime para citas y lista de espera
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const channel = supabase
-      .channel("admin-realtime-all")
+      .channel("admin-realtime-clean")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
@@ -203,54 +183,45 @@ export default function AdminPage() {
       .eq("id", id);
 
     if (error) {
-      alert("Error al actualizar estado: " + error.message);
+      alert("Error al actualizar: " + error.message);
       fetchAllData();
     }
   };
 
-  // 1. ACEPTAR CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleAcceptAppointment = async (app: Appointment) => {
     await updateStatus(app.id, "confirmed");
 
     if (app.client_phone !== "En local") {
       const cleanPhone = app.client_phone.replace(/\D/g, "");
       const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-
       const text = `¡Buenas ${app.client_name}! Cita confirmada para el ${app.booking_date} a las ${app.booking_time} h. ¡Te espero! 💈`;
 
       window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
   };
 
-  // 2. AVISAR A LA LISTA DE ESPERA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleContactWaitlistClient = (entry: WaitlistEntry) => {
     const cleanPhone = entry.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-
-    const text =
-      `💈 *HUECO DISPONIBLE - JBARBERS* 💈\n\n` +
-      `¡Buenas, *${entry.client_name}*! Te escribo porque estabas apuntado en la lista de espera para el *${entry.target_date}* y se me acaba de liberar un hueco.\n\n` +
-      `¿Sigues interesado en cortarte el pelo hoy? Respóndeme a este mensaje y te guardo la hora. ¡Gracias!`;
+    const text = `¡Buenas ${entry.client_name}! Se me ha liberado un hueco para hoy. ¿Te viene bien venirte? Respóndeme si lo quieres. 💈`;
 
     window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const handleDeleteWaitlistEntry = async (id: string) => {
-    if (!window.confirm("¿Eliminar a este cliente de la lista de espera?")) return;
+    if (!window.confirm("¿Eliminar de la lista de espera?")) return;
     setWaitlistEntries((prev) => prev.filter((w) => w.id !== id));
     await supabase.from("waitlist").delete().eq("id", id);
   };
 
   const handleDeleteAppointment = async (id: string, isBlock: boolean) => {
     const confirmMsg = isBlock
-      ? "¿Liberar esta hora para que vuelva a estar disponible en la web?"
-      : "¿Eliminar esta cita por completo de la agenda?";
+      ? "¿Liberar esta hora en la web?"
+      : "¿Eliminar esta cita de la agenda?";
 
     if (!window.confirm(confirmMsg)) return;
 
     setAppointments((prev) => prev.filter((app) => app.id !== id));
-    setAllAppointments((prev) => prev.filter((app) => app.id !== id));
-
     const { error } = await supabase.from("appointments").delete().eq("id", id);
     if (error) {
       alert("Error al eliminar: " + error.message);
@@ -259,7 +230,7 @@ export default function AdminPage() {
   };
 
   const handleReopenEntireDay = async () => {
-    if (!window.confirm(`¿Seguro que deseas reabrir todas las horas del día ${selectedDate}?`)) return;
+    if (!window.confirm(`¿Reabrir todas las horas del ${selectedDate}?`)) return;
 
     setLoading(true);
     await supabase
@@ -273,7 +244,7 @@ export default function AdminPage() {
   };
 
   const handleCloseEntireDay = async () => {
-    const reason = window.prompt("Motivo del cierre:", "Festivo / Vacaciones / Jarramplas");
+    const reason = window.prompt("Motivo del cierre:", "Cerrado");
     if (!reason) return;
 
     setLoading(true);
@@ -298,7 +269,6 @@ export default function AdminPage() {
     setLoading(false);
   };
 
-  // 3. ANULAR CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleConfirmCancellation = async (sendWhatsApp: boolean) => {
     if (!cancelModalApp) return;
     const appToCancel = cancelModalApp;
@@ -309,43 +279,28 @@ export default function AdminPage() {
     if (sendWhatsApp && appToCancel.client_phone !== "En local") {
       const cleanPhone = appToCancel.client_phone.replace(/\D/g, "");
       const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-      const webUrl = typeof window !== "undefined" ? window.location.origin : "nuestra web";
-
-      const text =
-        `💈 *AVISO DE CANCELACIÓN - JBARBERS* 💈\n\n` +
-        `¡Buenas, *${appToCancel.client_name}*! Te escribo porque lamentablemente tengo que cancelar tu cita del día *${appToCancel.booking_date}* a las *${appToCancel.booking_time} h* debido a ${cancelReason.trim()}.\n\n` +
-        `🙏 Te pido mil disculpas por el contratiempo. Puedes volver a pedir cita en cualquier otro hueco libre entrando aquí:\n` +
-        `👉 ${webUrl}\n\n` +
-        `O si lo prefieres, dime qué otra hora te vendría bien y te busco un hueco. ¡Muchas gracias por la comprensión!`;
+      const text = `¡Buenas ${appToCancel.client_name}! Tengo que cancelarte la cita de las ${appToCancel.booking_time} h por ${cancelReason.trim()}. Disculpa las molestias, avísame y buscamos otro hueco. 🙏`;
 
       window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
   };
 
-  // 4. AVISO DE RETRASO (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const handleSendDelayNotice = (app: Appointment) => {
     if (app.client_phone === "En local") return;
 
     const cleanPhone = app.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-
-    const text =
-      `💈 *AVISO DE HORARIO - JBARBERS* 💈\n\n` +
-      `¡Buenas, *${app.client_name}*! Te aviso con un poco de antelación de que voy con unos *10-15 minutos de retraso* con los cortes de antes.\n\n` +
-      `Para que no tengas que estar esperando aquí de pie, puedes venirte con calma sobre las *${app.booking_time}* y cuarto. ¡Disculpa las molestias y nos vemos ahora!`;
+    const text = `¡Buenas ${app.client_name}! Voy con unos 10-15 min de retraso. Vente sobre las ${app.booking_time} y cuarto para no esperar de pie. ¡Gracias! ✂️`;
 
     window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const handleShareStorySlot = (slotTime: string) => {
-    const text =
-      `🚨 ¡HUECO LIBRE DE ÚLTIMA HORA! 💈\n` +
-      `📅 Hoy a las ${slotTime} h en JBarbers Piornal.\n\n` +
-      `📲 Pide la cita antes de que vuele en el enlace de la bio:`;
+    const text = `🚨 ¡Hueco libre hoy a las ${slotTime} h en JBarbers! Reserva en el link de la bio 📲`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text);
-      alert(`¡Texto copiado!\n\nPégalo en tu Story de Instagram:\n\n"${text}"`);
+      alert(`¡Texto copiado para Stories:\n\n"${text}"`);
     }
   };
 
@@ -372,19 +327,10 @@ export default function AdminPage() {
     }
   };
 
-  // 5. RECORDATORIO DE CITA (REDIRECCIÓN DIRECTA SIN PESTAÑA BLANCA)
   const sendWhatsAppReminder = (app: Appointment) => {
     const cleanPhone = app.client_phone.replace(/\D/g, "");
     const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-
-    const text =
-      `💈 *RECORDATORIO DE CITA - JBARBERS* 💈\n\n` +
-      `¡Buenas, *${app.client_name}*! Te recuerdo tu cita reservada:\n\n` +
-      `✂️ *Servicio:* ${app.service_name}\n` +
-      `📅 *Día:* ${app.booking_date}\n` +
-      `⏰ *Hora:* ${app.booking_time} h\n` +
-      `📍 *Dirección:* ${BARBER_INFO.address}\n\n` +
-      `Si te surge cualquier imprevisto avísame por aquí. ¡Nos vemos!`;
+    const text = `¡Buenas ${app.client_name}! Te recuerdo tu cita hoy a las ${app.booking_time} h en JBarbers. ¡Nos vemos! 💈`;
 
     window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
@@ -395,75 +341,10 @@ export default function AdminPage() {
     setSelectedDate(d.toISOString().split("T")[0]);
   };
 
-  // CÁLCULOS
   const activeAppointments = appointments.filter(
     (a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]")
   );
   const totalDayRevenue = activeAppointments.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-
-  const currentMonthKey = selectedDate.substring(0, 7);
-  const currentMonthApps = useMemo(() => {
-    return allAppointments.filter(
-      (a) =>
-        a.booking_date.startsWith(currentMonthKey) &&
-        a.status !== "cancelled" &&
-        !a.client_name.startsWith("[BLOQUEADO]")
-    );
-  }, [allAppointments, currentMonthKey]);
-
-  const totalCurrentMonthRevenue = useMemo(() => {
-    return currentMonthApps.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-  }, [currentMonthApps]);
-
-  const activeMonthKey = selectedStatsMonth || currentMonthKey;
-  const filteredMonthApps = useMemo(() => {
-    return allAppointments.filter(
-      (a) =>
-        a.booking_date.startsWith(activeMonthKey) &&
-        a.status !== "cancelled" &&
-        !a.client_name.startsWith("[BLOQUEADO]")
-    );
-  }, [allAppointments, activeMonthKey]);
-
-  const activeMonthRevenue = useMemo(() => {
-    return filteredMonthApps.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-  }, [filteredMonthApps]);
-
-  const activeMonthAverageTicket = filteredMonthApps.length > 0
-    ? (activeMonthRevenue / filteredMonthApps.length).toFixed(1)
-    : "0";
-
-  const topServiceOfMonth = useMemo(() => {
-    if (filteredMonthApps.length === 0) return { name: "Sin datos", count: 0 };
-    const counts: Record<string, number> = {};
-    filteredMonthApps.forEach((a) => {
-      counts[a.service_name] = (counts[a.service_name] || 0) + 1;
-    });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return { name: sorted[0][0], count: sorted[0][1] };
-  }, [filteredMonthApps]);
-
-  const monthlyHistory = useMemo(() => {
-    const map: Record<string, { monthKey: string; revenue: number; cuts: number }> = {};
-    allAppointments
-      .filter((a) => a.status !== "cancelled" && !a.client_name.startsWith("[BLOQUEADO]"))
-      .forEach((a) => {
-        const m = a.booking_date.substring(0, 7);
-        if (!map[m]) map[m] = { monthKey: m, revenue: 0, cuts: 0 };
-        map[m].revenue += Number(a.price) || 0;
-        map[m].cuts += 1;
-      });
-
-    const list = Object.values(map).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
-    if (!map[currentMonthKey]) {
-      list.push({ monthKey: currentMonthKey, revenue: 0, cuts: 0 });
-    }
-    return list;
-  }, [allAppointments, currentMonthKey]);
-
-  const maxHistoricalRevenue = useMemo(() => {
-    return Math.max(...monthlyHistory.map((m) => m.revenue), 100);
-  }, [monthlyHistory]);
 
   const bookedTimeMap = new Map(appointments.map((a) => [a.booking_time, a]));
   const allBlocked = allSlots.length > 0 && allSlots.every((s) => bookedTimeMap.get(s)?.client_name.startsWith("[BLOQUEADO]"));
@@ -504,7 +385,7 @@ export default function AdminPage() {
             <input
               type="password"
               inputMode="numeric"
-              maxLength={10}
+              maxLength={12}
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
               placeholder="••••"
@@ -513,7 +394,7 @@ export default function AdminPage() {
             />
             {pinError && (
               <p className="text-xs text-rose-500 mt-2 flex items-center justify-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" /> PIN incorrecto (Por defecto: 1234)
+                <AlertCircle className="w-3.5 h-3.5" /> PIN incorrecto
               </p>
             )}
           </div>
@@ -530,80 +411,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes barberPoleMove {
-          0% { background-position: 0 0; }
-          100% { background-position: 40px 0; }
-        }
-        .barber-pole-stripe {
-          background: repeating-linear-gradient(
-            -45deg,
-            #ef4444,
-            #ef4444 10px,
-            #ffffff 10px,
-            #ffffff 20px,
-            #3b82f6 20px,
-            #3b82f6 30px,
-            #ffffff 30px,
-            #ffffff 40px
-          );
-          background-size: 56px 100%;
-          animation: barberPoleMove 1.5s linear infinite;
-        }
-        @keyframes adminTicker {
-          0% { transform: translate3d(0, 0, 0); }
-          100% { transform: translate3d(-50%, 0, 0); }
-        }
-        .admin-marquee {
-          display: flex;
-          width: 200%;
-          animation: adminTicker 22s linear infinite;
-        }
-      ` }} />
-
-      <div className="w-full max-w-2xl h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
-
-      {/* CINTA MARQUEE */}
-      <div className="w-full max-w-2xl overflow-hidden bg-zinc-900 border-b border-zinc-800 py-1 select-none text-[10px] text-zinc-400 font-semibold tracking-wider uppercase">
-        <div className="admin-marquee">
-          <div className="flex items-center gap-6 whitespace-nowrap">
-            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS EN VIVO</span>
-            <span>•</span>
-            <span>📅 {selectedDate}</span>
-            <span>•</span>
-            <span>👥 {activeAppointments.length} HOY</span>
-            <span>•</span>
-            <span className="text-emerald-400 font-bold">💰 HOY: {totalDayRevenue} €</span>
-            <span>•</span>
-            <span className="text-amber-300 font-bold">📋 {waitlistEntries.length} EN ESPERA</span>
-            <span>•</span>
-            <span>📍 PIORNAL</span>
-            <span>•</span>
-          </div>
-          <div className="flex items-center gap-6 whitespace-nowrap pl-6">
-            <span className="text-amber-400 font-bold">💈 PANEL JBARBERS EN VIVO</span>
-            <span>•</span>
-            <span>📅 {selectedDate}</span>
-            <span>•</span>
-            <span>👥 {activeAppointments.length} HOY</span>
-            <span>•</span>
-            <span className="text-emerald-400 font-bold">💰 HOY: {totalDayRevenue} €</span>
-            <span>•</span>
-            <span className="text-amber-300 font-bold">📋 {waitlistEntries.length} EN ESPERA</span>
-            <span>•</span>
-            <span>📍 PIORNAL</span>
-            <span>•</span>
-          </div>
-        </div>
-      </div>
-
-      {/* CABECERA */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pb-20">
       <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-amber-400 tracking-wider">JBARBERS • CONTROL</h1>
-            <p className="text-[11px] text-zinc-400">Sincronización en tiempo real</p>
+            <p className="text-[11px] text-zinc-400">Panel de agenda en directo</p>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -628,7 +441,7 @@ export default function AdminPage() {
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-semibold transition"
                 >
                   <ShieldBan className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Bloquear</span>
+                  <span>Bloquear Horas</span>
                 </button>
               </>
             )}
@@ -643,7 +456,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* PESTAÑAS PRINCIPALES */}
+        {/* PESTAÑAS */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800 text-xs font-bold">
           <button
             onClick={() => setCurrentView("agenda")}
@@ -714,7 +527,7 @@ export default function AdminPage() {
                   className="inline-flex items-center gap-1 text-[11px] text-rose-400 font-bold bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1 rounded-md border border-rose-500/30 transition"
                 >
                   <CalendarX2 className="w-3 h-3" />
-                  <span>Cerrar día entero</span>
+                  <span>Cerrar día</span>
                 </button>
               )}
             </div>
@@ -723,31 +536,26 @@ export default function AdminPage() {
       </header>
 
       <main className="w-full max-w-2xl p-4 space-y-4">
-        
-        {/* VISTA 1: AGENDA DEL DÍA */}
         {currentView === "agenda" && (
           <>
-            {/* ÚNICA CAJA: CAJA DE HOY */}
-        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl shadow-md flex items-center justify-between">
-          <div>
-            <span className="text-zinc-400 text-xs font-semibold">Caja de Hoy</span>
-            <p className="text-3xl font-black text-emerald-400 mt-0.5">{totalDayRevenue} €</p>
-          </div>
-          <div className="text-right">
-            <span className="text-xs font-bold text-zinc-300 bg-zinc-800 px-3 py-1.5 rounded-xl border border-zinc-700">
-              {activeAppointments.length} cortes
-            </span>
-          </div>
-        </div>
+            <div className="bg-gradient-to-r from-zinc-900 to-zinc-900 border border-zinc-800 p-4 rounded-2xl shadow-md flex items-center justify-between">
+              <div>
+                <span className="text-zinc-400 text-xs font-semibold">Recaudación estimada del día</span>
+                <p className="text-3xl font-black text-emerald-400 mt-0.5">{totalDayRevenue} €</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-zinc-300 bg-zinc-800 px-3 py-1.5 rounded-xl border border-zinc-700">
+                  {activeAppointments.length} clientes
+                </span>
+              </div>
+            </div>
 
-            {/* TIMELINE VISUAL */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2 shadow-lg">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-zinc-200">Distribución de horas del día</span>
+                <span className="font-bold text-zinc-200">Horas del día ({selectedDate})</span>
                 <div className="flex items-center gap-2 text-[10px] text-zinc-400">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Libre</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> Ocupada</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600" /> Bloqueo</span>
                 </div>
               </div>
 
@@ -784,29 +592,27 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* BUSCADOR */}
             <div className="relative">
               <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
               <input
                 type="text"
-                placeholder="Buscar por cliente, teléfono o corte..."
+                placeholder="Buscar cliente, teléfono o corte..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
               />
             </div>
 
-            {/* LISTADO DE CITAS */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                  Agenda del día ({filteredAppointments.length})
+                  Agenda ({filteredAppointments.length})
                 </h2>
                 <span className="text-[11px] text-zinc-500 font-semibold">{selectedDate}</span>
               </div>
 
               {loading ? (
-                <div className="text-center py-10 text-xs text-zinc-500">Actualizando agenda en vivo...</div>
+                <div className="text-center py-10 text-xs text-zinc-500">Cargando...</div>
               ) : filteredAppointments.length === 0 ? (
                 <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-2">
                   <p>No hay citas ni bloqueos registrados para este día.</p>
@@ -817,7 +623,7 @@ export default function AdminPage() {
                     }}
                     className="text-amber-400 underline font-semibold text-xs"
                   >
-                    + Añadir una cita manual
+                    + Añadir cita manual
                   </button>
                 </div>
               ) : (
@@ -846,7 +652,6 @@ export default function AdminPage() {
                         <button
                           onClick={() => handleDeleteAppointment(app.id, true)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition active:scale-95"
-                          title="Liberar hora"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Liberar</span>
@@ -860,11 +665,11 @@ export default function AdminPage() {
                       key={app.id}
                       className={`border rounded-2xl p-4 transition space-y-3 shadow-lg ${
                         isDuplicate
-                          ? "bg-rose-950/20 border-rose-500/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+                          ? "bg-rose-950/20 border-rose-500/70"
                           : app.status === "cancelled"
                           ? "bg-zinc-900/40 border-zinc-900 opacity-60"
                           : app.status === "pending"
-                          ? "bg-amber-950/15 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                          ? "bg-amber-950/15 border-amber-500/50"
                           : app.status === "completed"
                           ? "bg-emerald-950/10 border-emerald-900/40"
                           : "bg-zinc-900 border-zinc-800"
@@ -873,7 +678,7 @@ export default function AdminPage() {
                       {isDuplicate && (
                         <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[11px] text-rose-300 font-bold">
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                          <span>⚠️ HORA DUPLICADA: Coincide con otro cliente a las {app.booking_time} h</span>
+                          <span>⚠️ HORA DUPLICADA: Coincide a las {app.booking_time} h</span>
                         </div>
                       )}
 
@@ -907,7 +712,6 @@ export default function AdminPage() {
                           <button
                             onClick={() => handleViewClientHistory(app)}
                             className="text-sm font-bold text-zinc-100 mt-1 hover:text-amber-400 flex items-center gap-1 text-left"
-                            title="Ver historial del cliente"
                           >
                             <span>{app.client_name}</span>
                             <History className="w-3 h-3 text-zinc-500" />
@@ -919,7 +723,7 @@ export default function AdminPage() {
 
                           {app.notes && (
                             <p className="text-xs text-zinc-400 bg-zinc-950/80 p-2 rounded-xl border border-zinc-800 mt-2">
-                              💬 Nota: {app.notes}
+                              💬 {app.notes}
                             </p>
                           )}
                         </div>
@@ -929,7 +733,6 @@ export default function AdminPage() {
                             <a
                               href={`tel:${app.client_phone}`}
                               className="p-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 rounded-xl transition"
-                              title="Llamar"
                             >
                               <Phone className="w-4 h-4" />
                             </a>
@@ -937,23 +740,21 @@ export default function AdminPage() {
                           <button
                             onClick={() => handleDeleteAppointment(app.id, false)}
                             className="p-2 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl transition"
-                            title="Eliminar cita"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
 
-                      {/* BOTONES DE ACCIÓN: ACEPTAR CITA / RECORDAR / RETRASO */}
                       <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
                         {app.status === "pending" ? (
                           <div className="w-full flex items-center gap-2">
                             <button
                               onClick={() => handleAcceptAppointment(app)}
-                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-600/30 active:scale-95"
+                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
                             >
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>Aceptar Cita y Confirmar por WhatsApp</span>
+                              <span>Aceptar y confirmar por WhatsApp</span>
                             </button>
                             <button
                               onClick={() => setCancelModalApp(app)}
@@ -977,7 +778,6 @@ export default function AdminPage() {
                                 <button
                                   onClick={() => handleSendDelayNotice(app)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium transition"
-                                  title="Avisar que vas con 10 min de retraso"
                                 >
                                   <Timer className="w-3.5 h-3.5 text-amber-400" />
                                   <span>+10 min</span>
@@ -985,7 +785,7 @@ export default function AdminPage() {
                               </div>
                             ) : (
                               <span className="text-[11px] text-zinc-500 italic">
-                                {app.status === "cancelled" ? "Cita cancelada" : "Cita en persona"}
+                                {app.status === "cancelled" ? "Cancelada" : "En persona"}
                               </span>
                             )}
 
@@ -1020,23 +820,21 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* VISTA 2: LISTA DE ESPERA ORDENADA CRONOLÓGICAMENTE */}
         {currentView === "waitlist" && (
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-md space-y-1">
               <h2 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-amber-400" />
-                <span>Lista de Espera en Vivo ({waitlistEntries.length})</span>
+                <span>Lista de Espera ({waitlistEntries.length})</span>
               </h2>
               <p className="text-xs text-zinc-400">
-                Ordenados por turno de llegada: el primer cliente de la lista es el que antes pidió hueco.
+                Orden de llegada: el primero de la lista es el que antes pidió hueco.
               </p>
             </div>
 
             {waitlistEntries.length === 0 ? (
-              <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500 space-y-1">
-                <p>No hay clientes en lista de espera actualmente.</p>
-                <p className="text-[11px] text-zinc-600">Cuando un cliente se apunte en un día completo, aparecerá aquí al instante.</p>
+              <div className="bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-500">
+                No hay nadie en lista de espera ahora mismo.
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -1049,7 +847,7 @@ export default function AdminPage() {
                   return (
                     <div
                       key={entry.id}
-                      className="bg-zinc-900 border border-zinc-800 hover:border-amber-500/30 rounded-2xl p-4 shadow-lg flex flex-col space-y-2 transition"
+                      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-lg flex flex-col space-y-2"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2.5">
@@ -1070,38 +868,36 @@ export default function AdminPage() {
                             Para el {entry.target_date}
                           </span>
                           <p className="text-[10px] text-zinc-500 mt-1">
-                            Apuntado a las {requestTime} h
+                            {requestTime} h
                           </p>
                         </div>
                       </div>
 
                       {entry.notes && (
                         <p className="text-xs text-zinc-400 bg-zinc-950 p-2 rounded-xl border border-zinc-850">
-                          💬 Preferencia: {entry.notes}
+                          💬 {entry.notes}
                         </p>
                       )}
 
                       <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
                         <button
                           onClick={() => handleContactWaitlistClient(entry)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-600/20"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition"
                         >
                           <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                          <span>Avisar Hueco por WhatsApp</span>
+                          <span>Avisar Hueco Libre</span>
                         </button>
 
                         <div className="flex items-center gap-1.5">
                           <a
                             href={`tel:${entry.client_phone}`}
                             className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 rounded-xl transition"
-                            title="Llamar"
                           >
                             <Phone className="w-4 h-4" />
                           </a>
                           <button
                             onClick={() => handleDeleteWaitlistEntry(entry.id)}
                             className="p-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl transition"
-                            title="Eliminar de lista"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1116,6 +912,131 @@ export default function AdminPage() {
         )}
       </main>
 
+      {/* MODAL: BLOQUEAR FRANJA HORARIA (DESDE - HASTA) */}
+      {showBlockModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+
+              if (slotsToBlock.length === 0) {
+                alert("La hora de inicio debe ser anterior o igual a la hora de fin.");
+                return;
+              }
+
+              // Creamos los bloqueos para cada una de las horas del rango
+              const inserts = slotsToBlock.map((slot) => ({
+                client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
+                client_phone: BARBER_INFO.phone,
+                service_name: "Franja bloqueada",
+                price: 0,
+                booking_date: blockDate,
+                booking_time: slot,
+                status: "confirmed",
+              }));
+
+              const { error } = await supabase.from("appointments").insert(inserts);
+
+              if (error) {
+                alert("Error al bloquear la franja: " + error.message);
+              }
+
+              setShowBlockModal(false);
+              fetchAllData();
+            }}
+            className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
+                <ShieldBan className="w-4 h-4 text-amber-400" /> Bloquear Franja Horaria
+              </h3>
+              <button type="button" onClick={() => setShowBlockModal(false)} className="text-zinc-500 hover:text-zinc-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-300">Día:</label>
+                <input
+                  type="date"
+                  value={blockDate}
+                  onChange={(e) => setBlockDate(e.target.value)}
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
+                />
+              </div>
+
+              {/* SELECTORES DE RANGO HORARIO (DESDE - HASTA) */}
+              <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-400" /> Desde:
+                  </label>
+                  <select
+                    value={blockStartTime}
+                    onChange={(e) => setBlockStartTime(e.target.value)}
+                    className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg p-1.5 text-xs text-zinc-100 focus:outline-none"
+                  >
+                    {allSlots.map((t) => (
+                      <option key={t} value={t}>{t} h</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <ArrowRight className="w-3 h-3 text-amber-400" /> Hasta:
+                  </label>
+                  <select
+                    value={blockEndTime}
+                    onChange={(e) => setBlockEndTime(e.target.value)}
+                    className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg p-1.5 text-xs text-zinc-100 focus:outline-none"
+                  >
+                    {allSlots.map((t) => (
+                      <option key={t} value={t}>{t} h</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* RESUMEN DE SLOTS QUE SE VAN A BLOQUEAR */}
+              <div className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl text-center font-medium">
+                {slotsToBlock.length > 0 ? (
+                  <span>Se cerrarán <strong>{slotsToBlock.length} turnos</strong> ({blockStartTime} a {blockEndTime} h)</span>
+                ) : (
+                  <span className="text-rose-400">Rango no válido (la hora de fin debe ser posterior)</span>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-300">Motivo (solo para ti):</label>
+                <input
+                  type="text"
+                  value={blockReason}
+                  onChange={(e) => setBlockReason(e.target.value)}
+                  placeholder="Ej: Asunto personal, descanso..."
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button type="button" onClick={() => setShowBlockModal(false)} className="w-1/2 py-2.5 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold">Cancelar</button>
+              <button 
+                type="submit" 
+                disabled={slotsToBlock.length === 0}
+                className={`w-1/2 py-2.5 rounded-xl text-xs font-bold transition ${
+                  slotsToBlock.length > 0 
+                    ? "bg-amber-500 hover:bg-amber-400 text-zinc-950" 
+                    : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                }`}
+              >
+                Bloquear Franja
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* MODAL: ANULAR CITA */}
       {cancelModalApp && (
@@ -1131,16 +1052,16 @@ export default function AdminPage() {
             </div>
 
             <p className="text-xs text-zinc-300">
-              Vas a anular la cita de <strong className="text-white">{cancelModalApp.client_name}</strong> para las <strong>{cancelModalApp.booking_time} h</strong>.
+              Anular cita de <strong className="text-white">{cancelModalApp.client_name}</strong> a las <strong>{cancelModalApp.booking_time} h</strong>.
             </p>
 
             <div>
-              <label className="text-xs font-semibold text-zinc-400">Motivo para el mensaje de disculpa:</label>
+              <label className="text-xs font-semibold text-zinc-400">Motivo breve:</label>
               <input
                 type="text"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Ej: un imprevisto médico, descanso..."
+                placeholder="Ej: un imprevisto personal..."
                 className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -1148,7 +1069,7 @@ export default function AdminPage() {
             <div className="space-y-2 pt-1">
               <button
                 onClick={() => handleConfirmCancellation(true)}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-600/20"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
                 <span>Anular y avisar por WhatsApp</span>
@@ -1158,7 +1079,7 @@ export default function AdminPage() {
                 onClick={() => handleConfirmCancellation(false)}
                 className="w-full py-2 bg-zinc-800 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-semibold transition"
               >
-                Anular sin enviar WhatsApp
+                Anular sin avisar
               </button>
             </div>
           </div>
@@ -1190,7 +1111,7 @@ export default function AdminPage() {
             </div>
 
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              <p className="text-xs font-semibold text-zinc-400">Historial de citas:</p>
+              <p className="text-xs font-semibold text-zinc-400">Historial:</p>
               {selectedClientHistory.history.map((h) => (
                 <div key={h.id} className="text-[11px] p-2 bg-zinc-950/60 rounded-xl border border-zinc-850 flex justify-between">
                   <span>{h.booking_date} • {h.service_name}</span>
@@ -1203,85 +1124,9 @@ export default function AdminPage() {
               onClick={() => setSelectedClientHistory(null)}
               className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold"
             >
-              Cerrar ficha
+              Cerrar
             </button>
           </div>
-        </div>
-      )}
-
-      {/* MODAL: BLOQUEAR HORA */}
-      {showBlockModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const { error } = await supabase.from("appointments").insert([
-                {
-                  client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
-                  client_phone: BARBER_INFO.phone,
-                  service_name: "Hora bloqueada",
-                  price: 0,
-                  booking_date: blockDate,
-                  booking_time: blockTime,
-                  status: "confirmed",
-                },
-              ]);
-              if (error) alert("Error al bloquear: " + error.message);
-              setShowBlockModal(false);
-              fetchAllData();
-            }}
-            className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-2xl"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                <ShieldBan className="w-4 h-4 text-amber-400" /> Bloquear una hora
-              </h3>
-              <button type="button" onClick={() => setShowBlockModal(false)} className="text-zinc-500 hover:text-zinc-300">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-zinc-300">Día:</label>
-                <input
-                  type="date"
-                  value={blockDate}
-                  onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-300">Hora:</label>
-                <select
-                  value={blockTime}
-                  onChange={(e) => setBlockTime(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
-                >
-                  {allSlots.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-300">Motivo (solo para ti):</label>
-                <input
-                  type="text"
-                  value={blockReason}
-                  onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej: Médico, descanso..."
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2 text-sm text-zinc-100 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowBlockModal(false)} className="w-1/2 py-2.5 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold">Cancelar</button>
-              <button type="submit" className="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold">Bloquear</button>
-            </div>
-          </form>
         </div>
       )}
 
@@ -1305,7 +1150,7 @@ export default function AdminPage() {
                 },
               ]);
 
-              if (error) alert("Error al guardar cita: " + error.message);
+              if (error) alert("Error al guardar: " + error.message);
 
               setShowManualModal(false);
               setManualName("");
@@ -1391,7 +1236,7 @@ export default function AdminPage() {
 
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowManualModal(false)} className="w-1/2 py-2.5 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold">Cancelar</button>
-              <button type="submit" className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Guardar Cita</button>
+              <button type="submit" className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Guardar</button>
             </div>
           </form>
         </div>
