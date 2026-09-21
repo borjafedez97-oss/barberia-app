@@ -50,7 +50,7 @@ interface WaitlistEntry {
   created_at: string;
 }
 
-const ADMIN_PIN = "1234";
+const ADMIN_PIN = "2712200610";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
