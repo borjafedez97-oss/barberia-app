@@ -24,7 +24,8 @@ import {
   Timer,
   ClipboardList,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  Bell
 } from "lucide-react";
 
 interface Appointment {
@@ -65,6 +66,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
+  // Estado de Notificaciones Push
+  const [notificationsSubscribed, setNotificationsSubscribed] = useState<boolean>(false);
+
   // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
   const [blockDate, setBlockDate] = useState<string>("");
@@ -93,7 +97,6 @@ export default function AdminPage() {
 
   const allSlots = [...BARBER_INFO.morningSlots, ...BARBER_INFO.afternoonSlots];
 
-  // Cálculo de los slots incluidos en el rango seleccionado
   const slotsToBlock = allSlots.filter((slot) => {
     return slot >= blockStartTime && slot <= blockEndTime;
   });
@@ -107,6 +110,10 @@ export default function AdminPage() {
     const sessionAuth = sessionStorage.getItem("jbarbers_auth");
     if (sessionAuth === "true") {
       setIsAuthenticated(true);
+    }
+
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      setNotificationsSubscribed(true);
     }
   }, []);
 
@@ -169,6 +176,48 @@ export default function AdminPage() {
     } else {
       setPinError(true);
       setPinInput("");
+    }
+  };
+
+  // Función para vincular el móvil del barbero al Web Push
+  const subscribeToPush = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Este navegador no soporta notificaciones. En iPhone, añade la web a la pantalla de inicio primero.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        alert("Debes permitir las notificaciones para que suenen las citas en tu móvil.");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+      if (!vapidKey) {
+        alert("Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en las variables de entorno.");
+        return;
+      }
+
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey
+      });
+
+      await supabase.from("push_subscriptions").insert([
+        {
+          user_type: "barber",
+          subscription: sub.toJSON()
+        }
+      ]);
+
+      setNotificationsSubscribed(true);
+      alert("✅ ¡Móvil activado! Recibirás una notificación en pantalla con cada nueva reserva.");
+    } catch (err: any) {
+      console.error(err);
+      alert("Error activando notificaciones: " + err.message);
     }
   };
 
@@ -419,7 +468,18 @@ export default function AdminPage() {
             <p className="text-[11px] text-zinc-400">Panel de agenda en directo</p>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {/* BOTÓN ACTIVAR AVISOS PUSH */}
+            {!notificationsSubscribed && (
+              <button
+                onClick={subscribeToPush}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg text-xs font-bold transition shadow-md shadow-amber-500/20 active:scale-95"
+              >
+                <Bell className="w-3.5 h-3.5 fill-current" />
+                <span>Activar Avisos</span>
+              </button>
+            )}
+
             {currentView === "agenda" && (
               <>
                 <button
@@ -924,7 +984,6 @@ export default function AdminPage() {
                 return;
               }
 
-              // Creamos los bloqueos para cada una de las horas del rango
               const inserts = slotsToBlock.map((slot) => ({
                 client_name: `[BLOQUEADO] ${blockReason.trim() || "No disponible"}`,
                 client_phone: BARBER_INFO.phone,
@@ -966,7 +1025,6 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* SELECTORES DE RANGO HORARIO (DESDE - HASTA) */}
               <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
                 <div>
                   <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
@@ -999,7 +1057,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* RESUMEN DE SLOTS QUE SE VAN A BLOQUEAR */}
               <div className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl text-center font-medium">
                 {slotsToBlock.length > 0 ? (
                   <span>Se cerrarán <strong>{slotsToBlock.length} turnos</strong> ({blockStartTime} a {blockEndTime} h)</span>
