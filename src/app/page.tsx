@@ -254,7 +254,7 @@ export default function BookingPage() {
     setShowCreatorBadge((prev) => !prev);
   };
 
-  // CONFIRMAR CITA: SOLO GUARDA, ENVÍA NOTIFICACIÓN AL MÓVIL Y MUESTRA EL PASE VERDE
+  // CONFIRMACIÓN SIN WHATSAPP: GUARDA, DISPARA PUSH Y MUESTRA EL PASE VERDE
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -284,6 +284,7 @@ export default function BookingPage() {
         return;
       }
 
+      // 1. Guardar cita en Supabase
       const { error: insertError } = await supabase.from("appointments").insert([
         {
           client_name: clientName.trim(),
@@ -299,7 +300,7 @@ export default function BookingPage() {
 
       if (insertError) throw insertError;
 
-      // Envío de la notificación al móvil del barbero
+      // 2. Disparar notificación push al móvil del barbero en segundo plano
       fetch("/api/send-push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -309,7 +310,7 @@ export default function BookingPage() {
         })
       }).catch((err) => console.error("Error trigger push:", err));
 
-      // Pase directo al ticket verde oficial sin abrir WhatsApp
+      // 3. El cliente se queda dentro de la web en el ticket de confirmación (Paso 4)
       goToStep(4);
 
     } catch (err) {
@@ -320,7 +321,7 @@ export default function BookingPage() {
     }
   };
 
-  // LISTA DE ESPERA: GUARDA Y AVISA POR PUSH
+  // LISTA DE ESPERA SIN WHATSAPP
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!waitlistName.trim() || !waitlistPhone.trim()) {
