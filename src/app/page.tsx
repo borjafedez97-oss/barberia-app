@@ -14,7 +14,6 @@ import {
   MapPin, 
   Sun, 
   Moon, 
-  MessageCircle, 
   ChevronRight, 
   ArrowLeft,
   Flame,
@@ -37,7 +36,6 @@ function InstagramIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
-// 1. SONIDO MECÁNICO TÁCTIL (Web Audio API)
 const playMechanicalClick = () => {
   if (typeof window === "undefined") return;
   try {
@@ -62,7 +60,6 @@ const playMechanicalClick = () => {
   } catch {}
 };
 
-// 2. SONIDO ARMÓNICO CELESTIAL PARA EL AURA DEL LOGO
 const playAuraSound = () => {
   if (typeof window === "undefined") return;
   try {
@@ -257,7 +254,7 @@ export default function BookingPage() {
     setShowCreatorBadge((prev) => !prev);
   };
 
-  // CONFIRMACIÓN DE CITA OPTIMIZADA PARA ANDROID Y SAFARI
+  // CONFIRMAR CITA: SOLO GUARDA, ENVÍA NOTIFICACIÓN AL MÓVIL Y MUESTRA EL PASE VERDE
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -302,31 +299,18 @@ export default function BookingPage() {
 
       if (insertError) throw insertError;
 
-      const message =
-        `💈 *SOLICITUD DE CITA - ${BARBER_INFO.name.toUpperCase()}* 💈\n\n` +
-        `✂️ *Servicio:* ${selectedService.name} (${selectedService.price} €)\n` +
-        `⏱️ *Duración:* ${selectedService.duration} min\n` +
-        `📅 *Fecha:* ${selectedDate}\n` +
-        `⏰ *Hora:* ${selectedTime} h\n\n` +
-        `👤 *Cliente:* ${clientName.trim()}\n` +
-        `📱 *Teléfono:* ${clientPhone.trim()}\n` +
-        (notes.trim() ? `📝 *Nota:* ${notes.trim()}\n\n` : "\n") +
-        `¿Me confirmas disponibilidad? ¡Gracias!`;
+      // Envío de la notificación al móvil del barbero
+      fetch("/api/send-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "💈 ¡Nueva Cita Recibida!",
+          body: `${clientName.trim()} ha reservado para el ${selectedDate} a las ${selectedTime} h (${selectedService.name}).`
+        })
+      }).catch((err) => console.error("Error trigger push:", err));
 
-      // 1. Mostrar el ticket VIP de confirmación inmediatamente
+      // Pase directo al ticket verde oficial sin abrir WhatsApp
       goToStep(4);
-
-      // 2. Disparar WhatsApp mediante enlace nativo invisible (evita error de Chrome en Android)
-      const waUrl = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(message)}`;
-      setTimeout(() => {
-        const link = document.createElement("a");
-        link.href = waUrl;
-        link.rel = "noopener noreferrer";
-        link.target = "_top";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }, 150);
 
     } catch (err) {
       console.error(err);
@@ -336,7 +320,7 @@ export default function BookingPage() {
     }
   };
 
-  // LISTA DE ESPERA OPTIMIZADA
+  // LISTA DE ESPERA: GUARDA Y AVISA POR PUSH
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!waitlistName.trim() || !waitlistPhone.trim()) {
@@ -358,27 +342,21 @@ export default function BookingPage() {
         }
       ]);
 
-      const msg =
-        `💈 *LISTA DE ESPERA - JBARBERS* 💈\n\n` +
-        `¡Buenas! He visto que el día *${selectedDate}* está completo.\n` +
-        `Soy *${waitlistName.trim()}* (Tel: ${waitlistPhone.trim()}).\n` +
-        (waitlistNotes.trim() ? `📝 Preferencia: ${waitlistNotes.trim()}\n\n` : "\n") +
-        `Si se libera algún hueco por cancelación a última hora, ¡avísame por favor y me acerco! Gracias.`;
+      fetch("/api/send-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "📋 Nuevo en Lista de Espera",
+          body: `${waitlistName.trim()} se ha apuntado para el día ${selectedDate}.`
+        })
+      }).catch((err) => console.error("Error trigger push waitlist:", err));
 
       setShowWaitlistModal(false);
       setWaitlistName("");
       setWaitlistPhone("");
       setWaitlistNotes("");
 
-      // Disparar WhatsApp limpiamente
-      const waUrl = `https://wa.me/${BARBER_INFO.phone}?text=${encodeURIComponent(msg)}`;
-      const link = document.createElement("a");
-      link.href = waUrl;
-      link.rel = "noopener noreferrer";
-      link.target = "_top";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      alert("¡Te has apuntado con éxito a la lista de espera! El barbero te contactará si se libera un hueco.");
 
     } catch (err) {
       console.error(err);
@@ -589,10 +567,8 @@ export default function BookingPage() {
       <div className="gold-dust" style={{ top: "45%", left: "80%", animation: "floatDust 8s 1.5s infinite ease-in-out" }} />
       <div className="gold-dust" style={{ top: "70%", left: "30%", animation: "floatDust 7s 3s infinite ease-in-out" }} />
 
-      {/* TIRA BARBER POLE */}
       <div className="w-full max-w-lg h-1.5 barber-pole-stripe opacity-90 shadow-sm" />
 
-      {/* CINTA MARQUEE */}
       <div className="w-full max-w-lg overflow-hidden bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-zinc-950 py-1.5 border-b border-amber-400/40 shadow-lg select-none">
         <div className="marquee-container text-[11px] font-black tracking-widest uppercase">
           <div className="flex items-center gap-6 whitespace-nowrap">
@@ -622,7 +598,6 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* HEADER DE PORTADA */}
       <header className="relative w-full max-w-lg overflow-hidden border-b border-zinc-800 bg-zinc-900 shadow-2xl transition-all duration-700">
         {logoAuraActive && (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(245,158,11,0.55)_0%,rgba(245,158,11,0.15)_50%,transparent_80%)] z-10 pointer-events-none animate-pulse" />
@@ -639,7 +614,6 @@ export default function BookingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
         </div>
 
-        {/* LIVE BADGE + WIDGET PIORNAL + BOTÓN MANUAL DE RECARGA */}
         <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
           {nextAvailableToday ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-amber-500/50 text-amber-400 text-[11px] font-semibold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -669,7 +643,6 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* LOGO */}
         <div className="relative -mt-16 px-5 pb-4 text-center flex flex-col items-center z-20">
           <div 
             onTouchStart={handleLogoTouchStart}
@@ -719,7 +692,6 @@ export default function BookingPage() {
               <span>@{BARBER_INFO.instagram}</span>
             </a>
 
-            {/* PINES METÁLICOS */}
             <div 
               className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700/80 p-0.5 shadow-md flex items-center justify-center hover:scale-110 active:scale-90 transition-transform cursor-pointer"
               title="C.F. Piornal"
@@ -751,7 +723,6 @@ export default function BookingPage() {
           </div>
         </div>
 
-        {/* DYNAMIC ISLAND */}
         {step < 4 && (
           <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/70 flex justify-center">
             <div className="w-full max-w-xs bg-zinc-900/90 border border-zinc-700/60 rounded-full px-4 py-1.5 flex items-center justify-between shadow-inner">
@@ -771,10 +742,8 @@ export default function BookingPage() {
         )}
       </header>
 
-      {/* CUERPO PRINCIPAL */}
       <main className="w-full max-w-lg p-5 flex-1 flex flex-col justify-between">
         
-        {/* PASO 1: SELECCIONAR SERVICIO */}
         {step === 1 && (
           <div className={`space-y-4 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <div className="flex items-center justify-between">
@@ -826,7 +795,6 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 2: HORARIOS */}
         {step === 2 && selectedService && (
           <div className={`space-y-5 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <div className="flex items-center justify-between">
@@ -985,7 +953,6 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 3: TICKET VIP Y FORMULARIO */}
         {step === 3 && selectedService && (
           <div className={`space-y-4 ${slideDirection === "forward" ? "slide-forward" : "slide-backward"}`}>
             <button
@@ -998,7 +965,6 @@ export default function BookingPage() {
               <ArrowLeft className="w-3.5 h-3.5" /> Modificar fecha u hora
             </button>
 
-            {/* TICKET VIP DIGITAL */}
             <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl overflow-hidden">
               <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-950 rounded-full border-r border-zinc-800 -translate-y-1/2" />
               <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-950 rounded-full border-l border-zinc-800 -translate-y-1/2" />
@@ -1087,7 +1053,6 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* PASO 4: CONFIRMACIÓN */}
         {step === 4 && selectedService && (
           <div className="text-center py-6 space-y-5 slide-forward">
             <div className="w-16 h-16 bg-emerald-500/15 border border-emerald-500/40 rounded-full flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-pulse">
@@ -1096,10 +1061,10 @@ export default function BookingPage() {
 
             <div>
               <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-wide">
-                ¡Cita Confirmada!
+                ¡Cita Registrada!
               </h2>
               <p className="text-xs text-zinc-400 max-w-xs mx-auto mt-1 leading-relaxed">
-                Hemos enviado todos los datos por WhatsApp al barbero. Guarda este pase en tu móvil:
+                El barbero ya ha recibido la notificación de tu reserva en su móvil. Guarda este pase oficial:
               </p>
             </div>
 
@@ -1147,7 +1112,6 @@ export default function BookingPage() {
         )}
       </main>
 
-      {/* PIE DE PÁGINA */}
       <footer className="w-full max-w-lg mt-auto pt-6 pb-2 text-center select-none">
         <button
           onClick={handleSignatureClick}
@@ -1158,7 +1122,6 @@ export default function BookingPage() {
         </button>
       </footer>
 
-      {/* TARJETA DE AUTOR */}
       {showCreatorBadge && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="w-full max-w-xs bg-zinc-900 border border-amber-500/40 rounded-3xl p-5 text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)] relative">
@@ -1191,7 +1154,6 @@ export default function BookingPage() {
         </div>
       )}
 
-      {/* STICKY BAR */}
       {step === 2 && (
         <div className="fixed bottom-0 left-0 right-0 p-3 bg-zinc-950/85 backdrop-blur-md border-t border-zinc-800/80 z-40 flex justify-center">
           <div className="w-full max-w-lg">
@@ -1226,14 +1188,13 @@ export default function BookingPage() {
                   : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
               }`}
             >
-              <MessageCircle className="w-4 h-4 fill-current" />
-              <span>{isSubmitting ? "Bloqueando cita..." : "Confirmar y enviar por WhatsApp"}</span>
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{isSubmitting ? "Confirmando cita..." : "Confirmar Cita"}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* MODAL LISTA DE ESPERA */}
       {showWaitlistModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <form
@@ -1254,7 +1215,7 @@ export default function BookingPage() {
             </div>
 
             <p className="text-xs text-zinc-400">
-              Déjanos tus datos. Te guardaremos por orden estricto de llegada y te contactaremos por WhatsApp si se libera algún hueco.
+              Déjanos tus datos. Te guardaremos por orden estricto de llegada y te contactaremos si se libera algún hueco.
             </p>
 
             <div className="space-y-3">
@@ -1271,7 +1232,7 @@ export default function BookingPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300">Teléfono móvil (WhatsApp) *</label>
+                <label className="text-xs font-semibold text-zinc-300">Teléfono móvil de contacto *</label>
                 <input
                   type="tel"
                   required
