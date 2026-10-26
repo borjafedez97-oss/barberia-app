@@ -124,13 +124,6 @@ export default function BookingPage() {
   const [notes, setNotes] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Lista de espera
-  const [showWaitlistModal, setShowWaitlistModal] = useState<boolean>(false);
-  const [waitlistName, setWaitlistName] = useState<string>("");
-  const [waitlistPhone, setWaitlistPhone] = useState<string>("");
-  const [waitlistNotes, setWaitlistNotes] = useState<string>("");
-  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState<boolean>(false);
-
   // Micro-interacciones
   const [snipActive, setSnipActive] = useState<boolean>(false);
   const [calendarShake, setCalendarShake] = useState<boolean>(false);
@@ -254,7 +247,14 @@ export default function BookingPage() {
     setShowCreatorBadge((prev) => !prev);
   };
 
-  // CONFIRMACIÓN SIN WHATSAPP: GUARDA, DISPARA PUSH Y MUESTRA EL PASE VERDE
+  const handleNextDay = () => {
+    triggerHaptic(30);
+    const curr = new Date(selectedDate || new Date().toISOString().split("T")[0]);
+    curr.setDate(curr.getDate() + 1);
+    setSelectedDate(curr.toISOString().split("T")[0]);
+    setSelectedTime("");
+  };
+
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       alert("Por favor completa los datos de contacto obligatorios.");
@@ -284,7 +284,6 @@ export default function BookingPage() {
         return;
       }
 
-      // 1. Guardar cita en Supabase
       const { error: insertError } = await supabase.from("appointments").insert([
         {
           client_name: clientName.trim(),
@@ -300,7 +299,7 @@ export default function BookingPage() {
 
       if (insertError) throw insertError;
 
-      // 2. Disparar notificación push al móvil del barbero en segundo plano
+      // Envío de la notificación al móvil del barbero en segundo plano
       fetch("/api/send-push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,7 +309,7 @@ export default function BookingPage() {
         })
       }).catch((err) => console.error("Error trigger push:", err));
 
-      // 3. El cliente se queda dentro de la web en el ticket de confirmación (Paso 4)
+      // Pase directo al ticket verde sin salir de la web
       goToStep(4);
 
     } catch (err) {
@@ -318,52 +317,6 @@ export default function BookingPage() {
       alert("Hubo un problema de conexión al registrar tu cita. Inténtalo de nuevo.");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // LISTA DE ESPERA SIN WHATSAPP
-  const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!waitlistName.trim() || !waitlistPhone.trim()) {
-      alert("Por favor introduce tu nombre y número de teléfono.");
-      return;
-    }
-
-    triggerHaptic(40);
-    setIsSubmittingWaitlist(true);
-
-    try {
-      await supabase.from("waitlist").insert([
-        {
-          client_name: waitlistName.trim(),
-          client_phone: waitlistPhone.trim(),
-          target_date: selectedDate,
-          notes: waitlistNotes.trim() || null,
-          status: "waiting"
-        }
-      ]);
-
-      fetch("/api/send-push", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "📋 Nuevo en Lista de Espera",
-          body: `${waitlistName.trim()} se ha apuntado para el día ${selectedDate}.`
-        })
-      }).catch((err) => console.error("Error trigger push waitlist:", err));
-
-      setShowWaitlistModal(false);
-      setWaitlistName("");
-      setWaitlistPhone("");
-      setWaitlistNotes("");
-
-      alert("¡Te has apuntado con éxito a la lista de espera! El barbero te contactará si se libera un hueco.");
-
-    } catch (err) {
-      console.error(err);
-      alert("Error al entrar en la lista de espera. Inténtalo de nuevo.");
-    } finally {
-      setIsSubmittingWaitlist(false);
     }
   };
 
@@ -855,17 +808,14 @@ export default function BookingPage() {
                 <div>
                   <h3 className="text-sm font-bold text-zinc-200">No quedan turnos libres para este día</h3>
                   <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">
-                    ¿Quieres apuntarte en la lista de espera del barbero por si alguien cancela?
+                    Elige otra fecha en el calendario o mira la disponibilidad para mañana.
                   </p>
                 </div>
                 <button
-                  onClick={() => {
-                    triggerHaptic(40);
-                    setShowWaitlistModal(true);
-                  }}
+                  onClick={handleNextDay}
                   className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-amber-500/20"
                 >
-                  📋 Entrar en lista de espera
+                  📅 Ver huecos de mañana
                 </button>
               </div>
             ) : (
@@ -1193,86 +1143,6 @@ export default function BookingPage() {
               <span>{isSubmitting ? "Confirmando cita..." : "Confirmar Cita"}</span>
             </button>
           </div>
-        </div>
-      )}
-
-      {showWaitlistModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <form
-            onSubmit={handleWaitlistSubmit}
-            className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-1.5">
-                📋 Lista de espera para el {selectedDate}
-              </h3>
-              <button 
-                type="button" 
-                onClick={() => setShowWaitlistModal(false)}
-                className="text-zinc-500 hover:text-zinc-300"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-400">
-              Déjanos tus datos. Te guardaremos por orden estricto de llegada y te contactaremos si se libera algún hueco.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-zinc-300">Tu nombre completo *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Marcos García"
-                  value={waitlistName}
-                  onChange={(e) => setWaitlistName(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-300">Teléfono móvil de contacto *</label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="Ej: 612345678"
-                  value={waitlistPhone}
-                  onChange={(e) => setWaitlistPhone(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-400">Preferencia horaria (opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Mejor por la tarde a partir de las 18h..."
-                  value={waitlistNotes}
-                  onChange={(e) => setWaitlistNotes(e.target.value)}
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowWaitlistModal(false)}
-                className="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 rounded-xl text-xs font-semibold transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmittingWaitlist}
-                className="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 rounded-xl text-xs font-bold transition shadow-md"
-              >
-                {isSubmittingWaitlist ? "Guardando..." : "Apuntarme"}
-              </button>
-            </div>
-          </form>
         </div>
       )}
     </div>
