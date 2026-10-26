@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       .eq("user_type", "barber");
 
     if (error || !subs || subs.length === 0) {
-      return NextResponse.json({ message: "No hay móviles registrados para recibir avisos." });
+      return NextResponse.json({ message: "No hay móviles registrados" });
     }
 
     const payload = JSON.stringify({
@@ -27,19 +27,17 @@ export async function POST(req: Request) {
       url: "/admin"
     });
 
-    // Opciones de máxima prioridad para despertar teléfonos Android en reposo
-    const pushOptions: webpush.RequestOptions = {
+    const pushOptions = {
       TTL: 60 * 60 * 24, // 24 horas
-      urgency: "high", // Despierta el procesador de Android de inmediato
+      urgency: "high" as const,
       headers: {
-        Urgency: "high",
-        "X-Android-High-Priority": "true"
+        Urgency: "high"
       }
     };
 
     const sendPromises = subs.map((s: any) =>
       webpush.sendNotification(s.subscription, payload, pushOptions).catch((err) => {
-        console.error("Error al enviar notificación individual:", err);
+        console.error("Error push individual:", err);
       })
     );
 

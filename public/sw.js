@@ -1,3 +1,11 @@
+self.addEventListener("install", function (event) {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", function (event) {
   let data = {};
   if (event.data) {
@@ -8,23 +16,22 @@ self.addEventListener("push", function (event) {
     }
   }
 
+  const title = data.title || "💈 ¡Nueva Cita - JBarbers!";
   const options = {
     body: data.body || "Tienes una nueva cita reservada.",
     icon: "/logo.png",
     badge: "/logo.png",
-    // Patrón de vibración largo para que se note en el bolsillo
-    vibrate: [300, 150, 300, 150, 400],
-    tag: "appointment-" + Date.now(), // Tag único para que no agrupe ni silencie
+    tag: "appointment-" + Date.now(),
     renotify: true,
-    requireInteraction: true, // Mantiene la notificación visible hasta que la pulse
-    silent: false,
+    requireInteraction: true,
+    vibrate: [400, 200, 400, 200, 600],
     data: {
       url: data.url || "/admin"
     }
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "💈 ¡Nueva Cita - JBarbers!", options)
+    self.registration.showNotification(title, options)
   );
 });
 
