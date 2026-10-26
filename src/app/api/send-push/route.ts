@@ -27,8 +27,18 @@ export async function POST(req: Request) {
       url: "/admin"
     });
 
+    // Opciones de máxima prioridad para despertar teléfonos Android en reposo
+    const pushOptions: webpush.RequestOptions = {
+      TTL: 60 * 60 * 24, // 24 horas
+      urgency: "high", // Despierta el procesador de Android de inmediato
+      headers: {
+        Urgency: "high",
+        "X-Android-High-Priority": "true"
+      }
+    };
+
     const sendPromises = subs.map((s: any) =>
-      webpush.sendNotification(s.subscription, payload).catch((err) => {
+      webpush.sendNotification(s.subscription, payload, pushOptions).catch((err) => {
         console.error("Error al enviar notificación individual:", err);
       })
     );
