@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeftRight,
-  Bell
+  Bell,
+  Sparkles
 } from "lucide-react";
 
 interface Appointment {
@@ -43,6 +44,18 @@ interface Appointment {
 
 const ADMIN_PIN = "2712200610";
 
+// Conversión segura de clave VAPID para el Service Worker
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
@@ -53,7 +66,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
+  // Estado de Notificaciones Push
   const [notificationsSubscribed, setNotificationsSubscribed] = useState<boolean>(false);
+  const [isSubscribing, setIsSubscribing] = useState<boolean>(false);
 
   // Modales
   const [showBlockModal, setShowBlockModal] = useState<boolean>(false);
@@ -102,8 +117,15 @@ export default function AdminPage() {
       setIsAuthenticated(true);
     }
 
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-      setNotificationsSubscribed(true);
+    // Comprobar suscripción push real en el navegador
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.pushManager.getSubscription().then((sub) => {
+          if (sub) {
+            setNotificationsSubscribed(true);
+          }
+        });
+      });
     }
   }, []);
 
@@ -156,44 +178,62 @@ export default function AdminPage() {
     }
   };
 
+  // Función robusta para forzar el registro del móvil del barbero
   const subscribeToPush = async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      alert("Este navegador no soporta notificaciones. En iPhone, añade la web a la pantalla de inicio primero.");
+      alert("Este navegador no soporta notificaciones Web Push.");
       return;
     }
+
+    setIsSubscribing(true);
 
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        alert("Debes permitir las notificaciones para que suenen las citas en tu móvil.");
+        alert("⚠️ No diste permiso. Haz clic en el candado junto a la URL y pon Notificaciones en 'Permitir'.");
+        setIsSubscribing(false);
         return;
       }
 
       const registration = await navigator.serviceWorker.register("/sw.js");
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      await navigator.serviceWorker.ready;
 
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidKey) {
-        alert("Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en las variables de entorno.");
+        alert("Error: falta NEXT_PUBLIC_VAPID_PUBLIC_KEY en las variables de entorno de Vercel.");
+        setIsSubscribing(false);
         return;
       }
 
+      // Desuscribir token previo si estuviera huérfano
+      const existingSub = await registration.pushManager.getSubscription();
+      if (existingSub) {
+        await existingSub.unsubscribe();
+      }
+
+      // Crear nueva suscripción con clave binaria segura
       const sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidKey
+        applicationServerKey: urlBase64ToUint8Array(vapidKey)
       });
 
-      await supabase.from("push_subscriptions").insert([
+      // Guardar en Supabase
+      const { error } = await supabase.from("push_subscriptions").insert([
         {
           user_type: "barber",
           subscription: sub.toJSON()
         }
       ]);
 
+      if (error) throw error;
+
       setNotificationsSubscribed(true);
-      alert("✅ ¡Móvil activado! Recibirás una notificación en pantalla con cada nueva reserva.");
+      alert("✅ ¡Móvil vinculado con éxito! Ahora te sonará la campana cada vez que un cliente reserve.");
     } catch (err: any) {
       console.error(err);
-      alert("Error activando notificaciones: " + err.message);
+      alert("Error al vincular: " + (err.message || err));
+    } finally {
+      setIsSubscribing(false);
     }
   };
 
@@ -346,7 +386,6 @@ export default function AdminPage() {
     window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
   };
 
-  // Lógica de intercambio o desplazamiento de cita
   const handleSwapAppointments = async () => {
     if (!swapModalApp || !targetSlot) return;
 
@@ -359,7 +398,6 @@ export default function AdminPage() {
 
     try {
       if (otherApp) {
-        // Intercambio mutuo: swap de horas
         await supabase
           .from("appointments")
           .update({ booking_time: "temp" })
@@ -375,7 +413,6 @@ export default function AdminPage() {
           .update({ booking_time: targetSlot })
           .eq("id", currentApp.id);
       } else {
-        // Mover a hueco libre
         await supabase
           .from("appointments")
           .update({ booking_time: targetSlot })
@@ -467,7 +504,44 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pb-20">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pb-20 relative">
+      
+      {/* BANNER GIGANTE FORZOSO SI EL MÓVIL NO ESTÁ REGISTRADO */}
+      {!notificationsSubscribed && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-zinc-900 border-2 border-amber-500 rounded-3xl p-6 text-center space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.4)]">
+            <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto animate-bounce">
+              <Bell className="w-8 h-8 fill-current" />
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-xl font-black text-zinc-100 uppercase tracking-wide">
+                Activar Notificaciones
+              </h2>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Para que te suene el móvil y recibas los avisos en la pantalla de bloqueo cuando alguien reserve cita, pulsa el botón verde:
+              </p>
+            </div>
+
+            <button
+              disabled={isSubscribing}
+              onClick={subscribeToPush}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black rounded-2xl text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+            >
+              <Bell className="w-5 h-5 fill-current" />
+              <span>{isSubscribing ? "Vinculando tu móvil..." : "ACTIVAR AVISOS EN ESTE TELÉFONO"}</span>
+            </button>
+
+            <button
+              onClick={() => setNotificationsSubscribed(true)}
+              className="text-[11px] text-zinc-500 underline hover:text-zinc-400"
+            >
+              Continuar sin activar (no recibirás alertas)
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="w-full max-w-2xl bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-20 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div>
@@ -476,16 +550,6 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {!notificationsSubscribed && (
-              <button
-                onClick={subscribeToPush}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg text-xs font-bold transition shadow-md shadow-amber-500/20 active:scale-95"
-              >
-                <Bell className="w-3.5 h-3.5 fill-current" />
-                <span>Activar Avisos</span>
-              </button>
-            )}
-
             <button
               onClick={() => {
                 setManualDate(selectedDate);
@@ -794,7 +858,6 @@ export default function AdminPage() {
                     ) : (
                       <>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* BOTÓN INTERCAMBIAR O MOVER HORA */}
                           {app.status !== "cancelled" && (
                             <button
                               onClick={() => {
