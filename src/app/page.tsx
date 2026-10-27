@@ -284,6 +284,7 @@ export default function BookingPage() {
         return;
       }
 
+      // Se guarda directamente como confirmed
       const { error: insertError } = await supabase.from("appointments").insert([
         {
           client_name: clientName.trim(),
@@ -293,23 +294,22 @@ export default function BookingPage() {
           booking_date: selectedDate,
           booking_time: selectedTime,
           notes: notes.trim() || null,
-          status: "pending",
+          status: "confirmed",
         },
       ]);
 
       if (insertError) throw insertError;
 
-      // Envío de la notificación al móvil del barbero en segundo plano
+      // Notificación push directa
       fetch("/api/send-push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "💈 ¡Nueva Cita Recibida!",
-          body: `${clientName.trim()} ha reservado para el ${selectedDate} a las ${selectedTime} h (${selectedService.name}).`
+          title: "💈 ¡Nueva Cita Confirmada!",
+          body: `${clientName.trim()} tiene cita el ${selectedDate} a las ${selectedTime} h (${selectedService.name}).`
         })
       }).catch((err) => console.error("Error trigger push:", err));
 
-      // Pase directo al ticket verde sin salir de la web
       goToStep(4);
 
     } catch (err) {
@@ -1015,7 +1015,7 @@ export default function BookingPage() {
                 ¡Cita Registrada!
               </h2>
               <p className="text-xs text-zinc-400 max-w-xs mx-auto mt-1 leading-relaxed">
-                El barbero ya ha recibido la notificación de tu reserva en su móvil. Guarda este pase oficial:
+                Tu cita ha quedado confirmada automáticamente. Guarda este pase oficial:
               </p>
             </div>
 
@@ -1039,7 +1039,7 @@ export default function BookingPage() {
 
               <div className="pt-2 border-t border-dashed border-zinc-700 flex justify-between items-center">
                 <span className="text-[9px] font-mono text-zinc-500">|||| || | |||| |||</span>
-                <span className="text-[9px] font-bold text-emerald-400 uppercase">RESERVA ACTIVA</span>
+                <span className="text-[9px] font-bold text-emerald-400 uppercase">RESERVA CONFIRMADA</span>
               </div>
             </div>
 

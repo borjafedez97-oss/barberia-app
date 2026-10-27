@@ -25,8 +25,7 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeftRight,
-  Bell,
-  Sparkles
+  Bell
 } from "lucide-react";
 
 interface Appointment {
@@ -44,7 +43,6 @@ interface Appointment {
 
 const ADMIN_PIN = "2712200610";
 
-// Conversión segura de clave VAPID para el Service Worker
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
@@ -66,7 +64,6 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Estado de Notificaciones Push
   const [notificationsSubscribed, setNotificationsSubscribed] = useState<boolean>(false);
   const [isSubscribing, setIsSubscribing] = useState<boolean>(false);
 
@@ -117,7 +114,6 @@ export default function AdminPage() {
       setIsAuthenticated(true);
     }
 
-    // Comprobar suscripción push real en el navegador
     if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
       navigator.serviceWorker.ready.then((reg) => {
         reg.pushManager.getSubscription().then((sub) => {
@@ -178,7 +174,6 @@ export default function AdminPage() {
     }
   };
 
-  // Función robusta para forzar el registro del móvil del barbero
   const subscribeToPush = async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       alert("Este navegador no soporta notificaciones Web Push.");
@@ -205,19 +200,16 @@ export default function AdminPage() {
         return;
       }
 
-      // Desuscribir token previo si estuviera huérfano
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
         await existingSub.unsubscribe();
       }
 
-      // Crear nueva suscripción con clave binaria segura
       const sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey)
       });
 
-      // Guardar en Supabase
       const { error } = await supabase.from("push_subscriptions").insert([
         {
           user_type: "barber",
@@ -250,18 +242,6 @@ export default function AdminPage() {
     if (error) {
       alert("Error al actualizar: " + error.message);
       fetchAllData();
-    }
-  };
-
-  const handleAcceptAppointment = async (app: Appointment) => {
-    await updateStatus(app.id, "confirmed");
-
-    if (app.client_phone !== "En local") {
-      const cleanPhone = app.client_phone.replace(/\D/g, "");
-      const fullPhone = cleanPhone.startsWith("34") ? cleanPhone : `34${cleanPhone}`;
-      const text = `¡Buenas ${app.client_name}! Cita confirmada para el ${app.booking_date} a las ${app.booking_time} h. ¡Te espero! 💈`;
-
-      window.location.href = `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
     }
   };
 
@@ -506,7 +486,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pb-20 relative">
       
-      {/* BANNER GIGANTE FORZOSO SI EL MÓVIL NO ESTÁ REGISTRADO */}
+      {/* BANNER FORZOSO SI EL MÓVIL NO ESTÁ REGISTRADO */}
       {!notificationsSubscribed && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-zinc-900 border-2 border-amber-500 rounded-3xl p-6 text-center space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.4)]">
@@ -536,7 +516,7 @@ export default function AdminPage() {
               onClick={() => setNotificationsSubscribed(true)}
               className="text-[11px] text-zinc-500 underline hover:text-zinc-400"
             >
-              Continuar sin activar (no recibirás alertas)
+              Continuar sin activar
             </button>
           </div>
         </div>
@@ -760,8 +740,6 @@ export default function AdminPage() {
                       ? "bg-rose-950/20 border-rose-500/70"
                       : app.status === "cancelled"
                       ? "bg-zinc-900/40 border-zinc-900 opacity-60"
-                      : app.status === "pending"
-                      ? "bg-amber-950/15 border-amber-500/50"
                       : app.status === "completed"
                       ? "bg-emerald-950/10 border-emerald-900/40"
                       : "bg-zinc-900 border-zinc-800"
@@ -786,18 +764,14 @@ export default function AdminPage() {
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                               : app.status === "cancelled"
                               ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
-                              : app.status === "pending"
-                              ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse"
-                              : "bg-zinc-800 text-zinc-300 border-zinc-700"
+                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                           }`}
                         >
-                          {app.status === "pending"
-                            ? "⏳ Pendiente de Aceptar"
-                            : app.status === "confirmed"
-                            ? "Confirmada"
-                            : app.status === "completed"
+                          {app.status === "completed"
                             ? "Completada"
-                            : "Cancelada"}
+                            : app.status === "cancelled"
+                            ? "Cancelada"
+                            : "Confirmada"}
                         </span>
                       </div>
 
@@ -838,83 +812,64 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  {/* Acciones de gestión directa */}
                   <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
-                    {app.status === "pending" ? (
-                      <div className="w-full flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {app.status !== "cancelled" && (
                         <button
-                          onClick={() => handleAcceptAppointment(app)}
-                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+                          onClick={() => {
+                            setSwapModalApp(app);
+                            setTargetSlot(allSlots.find((s) => s !== app.booking_time) || "");
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold transition active:scale-95"
+                          title="Cambiar turno con otro cliente o mover hora"
                         >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Aceptar y confirmar por WhatsApp</span>
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          <span>Cambiar turno</span>
                         </button>
+                      )}
+
+                      {app.client_phone !== "En local" && app.status !== "cancelled" && (
+                        <>
+                          <button
+                            onClick={() => sendWhatsAppReminder(app)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                            <span>Recordar</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSendDelayNotice(app)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium transition"
+                          >
+                            <Timer className="w-3.5 h-3.5 text-amber-400" />
+                            <span>+10 min</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {app.status !== "completed" && app.status !== "cancelled" && (
+                        <button
+                          onClick={() => updateStatus(app.id, "completed")}
+                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-emerald-950 text-zinc-300 hover:text-emerald-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Listo</span>
+                        </button>
+                      )}
+                      {app.status !== "cancelled" && (
                         <button
                           onClick={() => setCancelModalApp(app)}
-                          className="px-3 py-2 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 rounded-xl text-xs font-semibold transition"
+                          className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
                         >
-                          Rechazar
+                          <X className="w-3.5 h-3.5" />
+                          <span>Anular</span>
                         </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {app.status !== "cancelled" && (
-                            <button
-                              onClick={() => {
-                                setSwapModalApp(app);
-                                setTargetSlot(allSlots.find((s) => s !== app.booking_time) || "");
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold transition active:scale-95"
-                              title="Cambiar turno con otro cliente o mover hora"
-                            >
-                              <ArrowLeftRight className="w-3.5 h-3.5" />
-                              <span>Cambiar turno</span>
-                            </button>
-                          )}
-
-                          {app.client_phone !== "En local" && app.status !== "cancelled" && (
-                            <>
-                              <button
-                                onClick={() => sendWhatsAppReminder(app)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                                <span>Recordar</span>
-                              </button>
-
-                              <button
-                                onClick={() => handleSendDelayNotice(app)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium transition"
-                              >
-                                <Timer className="w-3.5 h-3.5 text-amber-400" />
-                                <span>+10 min</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {app.status !== "completed" && app.status !== "cancelled" && (
-                            <button
-                              onClick={() => updateStatus(app.id, "completed")}
-                              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-emerald-950 text-zinc-300 hover:text-emerald-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Listo</span>
-                            </button>
-                          )}
-                          {app.status !== "cancelled" && (
-                            <button
-                              onClick={() => setCancelModalApp(app)}
-                              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-700 rounded-xl text-xs flex items-center gap-1 font-semibold transition"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                              <span>Anular</span>
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1054,7 +1009,7 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
                 <div>
                   <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-400" /> Desde:
+                    <Clock className="w-3.5 h-3.5 text-amber-400" /> Desde:
                   </label>
                   <select
                     value={blockStartTime}
@@ -1069,7 +1024,7 @@ export default function AdminPage() {
 
                 <div>
                   <label className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 text-amber-400" /> Hasta:
+                    <ArrowRight className="w-3.5 h-3.5 text-amber-400" /> Hasta:
                   </label>
                   <select
                     value={blockEndTime}
