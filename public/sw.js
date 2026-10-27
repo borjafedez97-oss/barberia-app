@@ -7,45 +7,54 @@ self.addEventListener("activate", function (event) {
 });
 
 self.addEventListener("push", function (event) {
-  let data = {};
+  let data = {
+    title: "💈 ¡Nueva Cita - JBarbers!",
+    body: "Tienes una nueva reserva confirmada.",
+    url: "/admin"
+  };
+
   if (event.data) {
     try {
-      data = event.data.json();
+      data = Object.assign(data, event.data.json());
     } catch (e) {
-      data = { title: "JBarbers Piornal", body: event.data.text() };
+      data.body = event.data.text();
     }
   }
 
-  const title = data.title || "💈 ¡Nueva Cita - JBarbers!";
-  const options = {
-    body: data.body || "Tienes una nueva cita reservada.",
+  const notificationOptions = {
+    body: data.body,
     icon: "/logo.png",
     badge: "/logo.png",
-    tag: "appointment-" + Date.now(),
+    // Patrón de vibración prolongado e ininterrumpido para Android
+    vibrate: [500, 250, 500, 250, 500],
+    tag: "citas-jbarbers-" + Date.now(),
     renotify: true,
-    requireInteraction: true,
-    vibrate: [400, 200, 400, 200, 600],
+    requireInteraction: true, // No desaparece hasta que el usuario interactúa
+    silent: false,
     data: {
       url: data.url || "/admin"
     }
   };
 
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(data.title, notificationOptions)
   );
 });
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "/admin";
+
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
         if (client.url.includes("/admin") && "focus" in client) {
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow("/admin");
+        return clients.openWindow(targetUrl);
       }
     })
   );

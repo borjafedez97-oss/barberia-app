@@ -18,26 +18,29 @@ export async function POST(req: Request) {
       .eq("user_type", "barber");
 
     if (error || !subs || subs.length === 0) {
-      return NextResponse.json({ message: "No hay móviles registrados" });
+      return NextResponse.json({ message: "No hay dispositivos registrados" });
     }
 
     const payload = JSON.stringify({
-      title: title || "💈 Nueva Cita - JBarbers",
-      body: body || "Tienes una nueva cita reservada.",
-      url: "/admin"
+      title: title || "💈 ¡Nueva Cita Confirmada!",
+      body: body || "Tienes una nueva cita en la agenda.",
+      url: "/admin",
+      timestamp: Date.now()
     });
 
-    const pushOptions = {
-      TTL: 60 * 60 * 24, // 24 horas
-      urgency: "high" as const,
+    // Opciones forzadas para FCM (Android) y APNs (Apple)
+    const pushOptions: webpush.RequestOptions = {
+      TTL: 0, // Entrega inmediata obligatoria: si el móvil está suspendido, fuerza el despertar
+      urgency: "high",
       headers: {
-        Urgency: "high"
+        Urgency: "high",
+        Topic: "appointments"
       }
     };
 
     const sendPromises = subs.map((s: any) =>
       webpush.sendNotification(s.subscription, payload, pushOptions).catch((err) => {
-        console.error("Error push individual:", err);
+        console.error("Error enviando push a dispositivo:", err);
       })
     );
 
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Error en send-push:", error);
+    console.error("Error general en send-push:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
